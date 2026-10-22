@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vite-plus/test';
-import { ref, nextTick } from 'vue';
+import { ref, shallowRef, nextTick } from 'vue';
 import { useFindReplace } from './use-find-replace.js';
 
 /** Monotonically increasing surface IDs for multi-open tests. */
@@ -37,22 +37,55 @@ function createManagerStub() {
   return stub;
 }
 
+/** An active editor facade — search runs through `ui.search`, not the editor. */
 function createEditorStub() {
+  return { editorVersion: 2 };
+}
+
+/** Stateful `ui.search` stub mirroring the host search session contract. */
+function createSearchStub({ canReplace = true, canReplaceAll = canReplace, available = true } = {}) {
+  const state = {
+    query: '',
+    total: 0,
+    activeIndex: -1,
+    canReplace,
+    canReplaceAll: false,
+    available,
+    includeTrackedDeletions: false,
+  };
   return {
-    commands: {
-      clearSearchSession: vi.fn(),
-      setSearchSession: vi.fn(() => ({ matches: [], activeMatchIndex: -1 })),
-      nextSearchMatch: vi.fn(() => ({ activeMatchIndex: 0, match: null })),
-      previousSearchMatch: vi.fn(() => ({ activeMatchIndex: 0, match: null })),
-      replaceSearchMatch: vi.fn(() => ({ matches: [], activeMatchIndex: -1 })),
-      replaceAllSearchMatches: vi.fn(() => ({ replacedCount: 0 })),
-    },
-    extensionStorage: {
-      Search: {
-        searchResults: [],
-        activeMatchIndex: -1,
-      },
-    },
+    getSnapshot: vi.fn(() => ({ ...state })),
+    find: vi.fn((query, options = {}) => {
+      state.query = query;
+      state.total = query ? 2 : 0;
+      state.activeIndex = query ? 0 : -1;
+      state.canReplaceAll = state.total > 0 && canReplaceAll;
+      state.includeTrackedDeletions = options.includeTrackedDeletions === true;
+      return { ...state };
+    }),
+    next: vi.fn(() => {
+      if (state.total > 0) state.activeIndex = (state.activeIndex + 1) % state.total;
+      return { ok: true };
+    }),
+    previous: vi.fn(() => {
+      if (state.total > 0) state.activeIndex = (state.activeIndex - 1 + state.total) % state.total;
+      return { ok: true };
+    }),
+    clear: vi.fn(() => {
+      state.query = '';
+      state.total = 0;
+      state.activeIndex = -1;
+    }),
+    replace: vi.fn(() => {
+      state.total = Math.max(0, state.total - 1);
+      state.activeIndex = state.total > 0 ? Math.min(state.activeIndex, state.total - 1) : -1;
+      return { ok: true };
+    }),
+    replaceAll: vi.fn(() => {
+      state.total = 0;
+      state.activeIndex = -1;
+      return { ok: true };
+    }),
   };
 }
 
@@ -61,6 +94,7 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 describe('useFindReplace', () => {
   let manager;
   let editor;
+  let search;
   let activeEditorRef;
   let findReplace;
   let configValue;
@@ -69,7 +103,8 @@ describe('useFindReplace', () => {
     surfaceIdSeq = 0;
     manager = createManagerStub();
     editor = createEditorStub();
-    activeEditorRef = ref(editor);
+    search = createSearchStub();
+    activeEditorRef = shallowRef(editor);
     configValue = true;
 
     findReplace = useFindReplace({
@@ -77,6 +112,7 @@ describe('useFindReplace', () => {
       getActiveEditor: () => editor,
       activeEditorRef,
       getFindReplaceConfig: () => configValue,
+      getSuperDocUI: () => ({ search }),
     });
   });
 
@@ -317,65 +353,26 @@ describe('useFindReplace', () => {
     });
   });
 
-  describe('getSearchStorage fallback', () => {
-    // `getSearchStorage` first tries `extensionStorage.Search` and
-    // `storage.Search`. When neither carries a live session, it falls back
-    // to scanning every key for an object with `searchIndex` and
-    // `searchResults`. The fallback is what catches non-default extension
-    // names; without an explicit test the polling path silently skips it.
-    it('finds storage under a non-Search key via the fallback scan', async () => {
-      // Editor with the Search extension registered under a custom key. The
-      // direct `extensionStorage.Search` and `storage.Search` lookups miss;
-      // the fallback iterates keys and matches on the structural probe.
-      const customEditor = {
-        commands: editor.commands,
-        extensionStorage: {
-          CustomFinder: {
-            searchIndex: [{ from: 0, to: 1 }],
-            searchResults: [
-              { from: 0, to: 1 },
-              { from: 5, to: 6 },
-            ],
-            activeMatchIndex: 1,
-          },
-        },
-      };
-      const customFindReplace = useFindReplace({
-        getSurfaceManager: () => manager,
-        getActiveEditor: () => customEditor,
-        activeEditorRef: ref(customEditor),
-        getFindReplaceConfig: () => true,
-      });
-
-      await customFindReplace.open();
+  describe('polling', () => {
+    it('syncs match state from the host search snapshot', async () => {
+      await findReplace.open();
       await vi.dynamicImportSettled();
+      const handle = manager.open.mock.calls.at(-1)[0].props.findReplace;
 
-      // The handle exposed to the surface component carries the live state
-      // refs that polling syncs into.
-      const findReplaceHandle = manager.open.mock.calls.at(-1)[0].props.findReplace;
+      // A mutation outside the panel changes the host session.
+      search.getSnapshot.mockReturnValue({ total: 2, activeIndex: 1, canReplace: true, available: true });
 
-      // Wait one polling tick (200 ms interval) so syncFromEditorStorage runs.
+      // Wait one polling tick (200 ms interval).
       await new Promise((resolve) => setTimeout(resolve, 250));
 
-      expect(findReplaceHandle.matchCount.value).toBe(2);
-      expect(findReplaceHandle.activeMatchIndex.value).toBe(1);
+      expect(handle.matchCount.value).toBe(2);
+      expect(handle.activeMatchIndex.value).toBe(1);
 
-      customFindReplace.close();
+      findReplace.close();
     });
   });
 
   describe('surface close cleanup', () => {
-    it('clears search session when surface settles as closed', async () => {
-      await findReplace.open();
-      await vi.dynamicImportSettled();
-
-      manager.lastHandle._settle({ status: 'closed', reason: 'escape' });
-      await tick();
-
-      expect(editor.commands.clearSearchSession).toHaveBeenCalled();
-      expect(findReplace.isOpen.value).toBe(false);
-    });
-
     it('clears search session when surface settles as replaced', async () => {
       await findReplace.open();
       await vi.dynamicImportSettled();
@@ -383,7 +380,7 @@ describe('useFindReplace', () => {
       manager.lastHandle._settle({ status: 'replaced', replacedBy: 'some-other-surface' });
       await tick();
 
-      expect(editor.commands.clearSearchSession).toHaveBeenCalled();
+      expect(search.clear).toHaveBeenCalled();
       expect(findReplace.isOpen.value).toBe(false);
     });
 
@@ -421,7 +418,7 @@ describe('useFindReplace', () => {
       // Vue watcher fires async
       await tick();
 
-      expect(editor.commands.clearSearchSession).toHaveBeenCalled();
+      expect(search.clear).toHaveBeenCalled();
       expect(manager.lastHandle.close).toHaveBeenCalled();
     });
   });
@@ -550,42 +547,6 @@ describe('useFindReplace', () => {
       handle = manager.open.mock.calls[0][0].props.findReplace;
     });
 
-    it('goNext calls editor.commands.nextSearchMatch', () => {
-      // Set up some matches first
-      handle.findQuery.value = 'test';
-      editor.commands.setSearchSession.mockReturnValue({ matches: [{}], activeMatchIndex: 0 });
-
-      // Manually set matchCount to simulate a search result
-      // The watcher runs async, so we directly set the state for this test
-      handle.matchCount.value = 1;
-
-      handle.goNext();
-      expect(editor.commands.nextSearchMatch).toHaveBeenCalled();
-    });
-
-    it('goPrev calls editor.commands.previousSearchMatch', () => {
-      handle.matchCount.value = 1;
-
-      handle.goPrev();
-      expect(editor.commands.previousSearchMatch).toHaveBeenCalled();
-    });
-
-    it('replaceCurrent calls editor.commands.replaceSearchMatch', () => {
-      handle.matchCount.value = 1;
-      handle.replaceText.value = 'new text';
-
-      handle.replaceCurrent();
-      expect(editor.commands.replaceSearchMatch).toHaveBeenCalledWith('new text');
-    });
-
-    it('replaceAll calls editor.commands.replaceAllSearchMatches', () => {
-      handle.matchCount.value = 1;
-      handle.replaceText.value = 'new text';
-
-      handle.replaceAll();
-      expect(editor.commands.replaceAllSearchMatches).toHaveBeenCalledWith('new text');
-    });
-
     it('replaceCurrent is a no-op when replaceEnabled is false', async () => {
       // Close and reopen with replaceEnabled: false
       manager.lastHandle._settle({ status: 'closed' });
@@ -596,11 +557,13 @@ describe('useFindReplace', () => {
       await vi.dynamicImportSettled();
 
       const newHandle = manager.open.mock.calls[1][0].props.findReplace;
-      newHandle.matchCount.value = 1;
+      newHandle.findQuery.value = 'needle';
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      expect(newHandle.hasMatches.value).toBe(true);
       newHandle.replaceText.value = 'new text';
 
       newHandle.replaceCurrent();
-      expect(editor.commands.replaceSearchMatch).not.toHaveBeenCalled();
+      expect(search.replace).not.toHaveBeenCalled();
     });
 
     it('replaceAll is a no-op when replaceEnabled is false', async () => {
@@ -613,11 +576,13 @@ describe('useFindReplace', () => {
       await vi.dynamicImportSettled();
 
       const newHandle = manager.open.mock.calls[1][0].props.findReplace;
-      newHandle.matchCount.value = 1;
+      newHandle.findQuery.value = 'needle';
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      expect(newHandle.hasMatches.value).toBe(true);
       newHandle.replaceText.value = 'new text';
 
       newHandle.replaceAll();
-      expect(editor.commands.replaceAllSearchMatches).not.toHaveBeenCalled();
+      expect(search.replaceAll).not.toHaveBeenCalled();
     });
 
     it('registerFocusFn stores the function', () => {
@@ -628,45 +593,6 @@ describe('useFindReplace', () => {
       // We can verify by opening again
       findReplace.open();
       expect(focusFn).toHaveBeenCalled();
-    });
-
-    it('runs search sessions with visible search model', async () => {
-      handle.findQuery.value = 'tracked';
-      await new Promise((resolve) => setTimeout(resolve, 180));
-
-      expect(editor.commands.setSearchSession).toHaveBeenCalledWith(
-        'tracked',
-        expect.objectContaining({
-          searchModel: 'visible',
-        }),
-      );
-    });
-
-    it('uses raw search model when includeDeletedText is true in config', async () => {
-      manager.lastHandle._settle({ status: 'closed' });
-      await tick();
-
-      const customEditor = createEditorStub();
-      const fr = useFindReplace({
-        getSurfaceManager: () => manager,
-        getActiveEditor: () => customEditor,
-        activeEditorRef: ref(customEditor),
-        getFindReplaceConfig: () => ({ includeDeletedText: true }),
-      });
-
-      await fr.open();
-      await vi.dynamicImportSettled();
-      const customHandle = manager.open.mock.calls.at(-1)[0].props.findReplace;
-
-      customHandle.findQuery.value = 'deleted';
-      await new Promise((resolve) => setTimeout(resolve, 180));
-
-      expect(customEditor.commands.setSearchSession).toHaveBeenCalledWith(
-        'deleted',
-        expect.objectContaining({
-          searchModel: 'raw',
-        }),
-      );
     });
   });
 
@@ -726,66 +652,14 @@ describe('useFindReplace', () => {
     });
   });
 
-  describe('v2 driver (host.search via ui.search)', () => {
-    /** A V2 active editor facade — no command-backed search API. */
-    function createV2Editor() {
-      return { editorVersion: 2 };
-    }
-
-    /** Stateful `ui.search` stub mirroring the host search session contract. */
-    function createV2SearchStub({ canReplace = true, canReplaceAll = canReplace, available = true } = {}) {
-      const state = {
-        query: '',
-        total: 0,
-        activeIndex: -1,
-        canReplace,
-        canReplaceAll: false,
-        available,
-        includeTrackedDeletions: false,
-      };
-      return {
-        getSnapshot: vi.fn(() => ({ ...state })),
-        find: vi.fn((query, options = {}) => {
-          state.query = query;
-          state.total = query ? 2 : 0;
-          state.activeIndex = query ? 0 : -1;
-          state.canReplaceAll = state.total > 0 && canReplaceAll;
-          state.includeTrackedDeletions = options.includeTrackedDeletions === true;
-          return { ...state };
-        }),
-        next: vi.fn(() => {
-          if (state.total > 0) state.activeIndex = (state.activeIndex + 1) % state.total;
-          return { ok: true };
-        }),
-        previous: vi.fn(() => {
-          if (state.total > 0) state.activeIndex = (state.activeIndex - 1 + state.total) % state.total;
-          return { ok: true };
-        }),
-        clear: vi.fn(() => {
-          state.query = '';
-          state.total = 0;
-          state.activeIndex = -1;
-        }),
-        replace: vi.fn(() => {
-          state.total = Math.max(0, state.total - 1);
-          state.activeIndex = state.total > 0 ? Math.min(state.activeIndex, state.total - 1) : -1;
-          return { ok: true };
-        }),
-        replaceAll: vi.fn(() => {
-          state.total = 0;
-          state.activeIndex = -1;
-          return { ok: true };
-        }),
-      };
-    }
-
-    function makeV2({ canReplace = true, canReplaceAll = canReplace, available = true } = {}) {
-      const v2Editor = createV2Editor();
-      const search = createV2SearchStub({ canReplace, canReplaceAll, available });
+  describe('ui.search session', () => {
+    function makeSession({ canReplace = true, canReplaceAll = canReplace, available = true } = {}) {
+      const activeEditor = createEditorStub();
+      const search = createSearchStub({ canReplace, canReplaceAll, available });
       const fr = useFindReplace({
         getSurfaceManager: () => manager,
-        getActiveEditor: () => v2Editor,
-        activeEditorRef: ref(v2Editor),
+        getActiveEditor: () => activeEditor,
+        activeEditorRef: ref(activeEditor),
         getFindReplaceConfig: () => true,
         getSuperDocUI: () => ({ search }),
       });
@@ -793,30 +667,30 @@ describe('useFindReplace', () => {
     }
 
     it('wouldOpen requires the host search facade to be available', () => {
-      const unavailable = makeV2({ available: false });
+      const unavailable = makeSession({ available: false });
       expect(unavailable.fr.wouldOpen()).toBe(false);
 
       const noUi = useFindReplace({
         getSurfaceManager: () => manager,
-        getActiveEditor: () => createV2Editor(),
+        getActiveEditor: () => createEditorStub(),
         getFindReplaceConfig: () => true,
         getSuperDocUI: () => null,
       });
       expect(noUi.wouldOpen()).toBe(false);
 
-      const available = makeV2();
+      const available = makeSession();
       expect(available.fr.wouldOpen()).toBe(true);
     });
 
     it('keeps older ui.search handles working while preferring find()', async () => {
-      const v2Editor = createV2Editor();
-      const search = createV2SearchStub();
+      const activeEditor = createEditorStub();
+      const search = createSearchStub();
       search.search = search.find;
       delete search.find;
       const fr = useFindReplace({
         getSurfaceManager: () => manager,
-        getActiveEditor: () => v2Editor,
-        activeEditorRef: ref(v2Editor),
+        getActiveEditor: () => activeEditor,
+        activeEditorRef: ref(activeEditor),
         getFindReplaceConfig: () => ({ includeDeletedText: true }),
         getSuperDocUI: () => ({ search }),
       });
@@ -837,7 +711,7 @@ describe('useFindReplace', () => {
     });
 
     it('routes query and navigation through ui.search', async () => {
-      const { fr, search } = makeV2();
+      const { fr, search } = makeSession();
       await fr.open();
       await vi.dynamicImportSettled();
       const handle = manager.open.mock.calls.at(-1)[0].props.findReplace;
@@ -864,8 +738,8 @@ describe('useFindReplace', () => {
     });
 
     it('threads the regex toggle into ui.search and surfaces invalid-pattern errors (SD-3569)', async () => {
-      const v2Editor = createV2Editor();
-      const search = createV2SearchStub();
+      const activeEditor = createEditorStub();
+      const search = createSearchStub();
       search.find = vi.fn((query, options = {}) => ({
         query,
         total: options.regex && query === '(' ? 0 : 1,
@@ -878,8 +752,8 @@ describe('useFindReplace', () => {
       }));
       const fr = useFindReplace({
         getSurfaceManager: () => manager,
-        getActiveEditor: () => v2Editor,
-        activeEditorRef: ref(v2Editor),
+        getActiveEditor: () => activeEditor,
+        activeEditorRef: ref(activeEditor),
         getFindReplaceConfig: () => true,
         getSuperDocUI: () => ({ search }),
       });
@@ -888,7 +762,7 @@ describe('useFindReplace', () => {
       await vi.dynamicImportSettled();
       const handle = manager.open.mock.calls.at(-1)[0].props.findReplace;
 
-      // The V2 driver exposes the regex toggle.
+      // A host search session exposes the regex toggle.
       expect(handle.regexSupported.value).toBe(true);
 
       handle.regex.value = true;
@@ -915,13 +789,13 @@ describe('useFindReplace', () => {
       fr.close();
     });
 
-    it('passes tracked deletions from config into ui.search on v2', async () => {
-      const v2Editor = createV2Editor();
-      const search = createV2SearchStub();
+    it('passes tracked deletions from config into ui.search', async () => {
+      const activeEditor = createEditorStub();
+      const search = createSearchStub();
       const fr = useFindReplace({
         getSurfaceManager: () => manager,
-        getActiveEditor: () => v2Editor,
-        activeEditorRef: ref(v2Editor),
+        getActiveEditor: () => activeEditor,
+        activeEditorRef: ref(activeEditor),
         getFindReplaceConfig: () => ({ includeDeletedText: true }),
         getSuperDocUI: () => ({ search }),
       });
@@ -942,7 +816,7 @@ describe('useFindReplace', () => {
     });
 
     it('replaceCurrent / replaceAll mutate through ui.search and refresh state', async () => {
-      const { fr, search } = makeV2();
+      const { fr, search } = makeSession();
       await fr.open();
       await vi.dynamicImportSettled();
       const handle = manager.open.mock.calls.at(-1)[0].props.findReplace;
@@ -963,7 +837,7 @@ describe('useFindReplace', () => {
     });
 
     it('holds replacePending across an async (worker) replace and blocks re-entry', async () => {
-      const { fr, search } = makeV2();
+      const { fr, search } = makeSession();
       let resolveReplace;
       search.replace.mockImplementation(
         () =>
@@ -995,7 +869,7 @@ describe('useFindReplace', () => {
     });
 
     it('keeps Replace enabled and refuses Replace all for a truncated session', async () => {
-      const { fr, search } = makeV2({ canReplace: true, canReplaceAll: false });
+      const { fr, search } = makeSession({ canReplace: true, canReplaceAll: false });
       await fr.open();
       await vi.dynamicImportSettled();
       const handle = manager.open.mock.calls.at(-1)[0].props.findReplace;
@@ -1015,7 +889,7 @@ describe('useFindReplace', () => {
     });
 
     it('disables replace and hides ignore-diacritics in read-only mode', async () => {
-      const { fr, search } = makeV2({ canReplace: false });
+      const { fr, search } = makeSession({ canReplace: false });
       await fr.open();
       await vi.dynamicImportSettled();
       const handle = manager.open.mock.calls.at(-1)[0].props.findReplace;
@@ -1024,7 +898,7 @@ describe('useFindReplace', () => {
       await new Promise((resolve) => setTimeout(resolve, 180));
 
       expect(handle.canReplace.value).toBe(false);
-      // V2 does not support ignore-diacritics search.
+      // The host search session has no ignore-diacritics mode.
       expect(handle.ignoreDiacriticsSupported.value).toBe(false);
 
       handle.replaceText.value = 'pin';
@@ -1037,7 +911,7 @@ describe('useFindReplace', () => {
     });
 
     it('clears the host search session on close', async () => {
-      const { fr, search } = makeV2();
+      const { fr, search } = makeSession();
       await fr.open();
       await vi.dynamicImportSettled();
 

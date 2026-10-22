@@ -465,13 +465,9 @@ describe('uiConfig reaches the runtime', () => {
         const superdoc = await mountInstance(config);
         const findReplace = useFindReplace({
           getSurfaceManager: () => ({ open: () => ({ id: 's', close() {}, result: new Promise(() => {}) }) }),
-          // `setSearchSession` is what marks an editor as v1; without it
-          // `wouldOpen` requires a live v2 search facade and would report
-          // false for every config, hiding the difference under test.
-          getActiveEditor: () => ({
-            commands: { setSearchSession: () => ({ matches: [], activeMatchIndex: -1 }) },
-            extensionStorage: { Search: { searchResults: [], activeMatchIndex: -1 } },
-          }),
+          // A live search session, so `wouldOpen` reflects only the config.
+          getActiveEditor: () => ({ editorVersion: 2, commands: null }),
+          getSuperDocUI: () => ({ search: { find() {}, getSnapshot: () => ({ available: true }) } }),
           // The expression under test, copied from `SuperDoc.vue`.
           getFindReplaceConfig: () => (superdoc.uiConfig.search.enabled ? superdoc.uiConfig.search.options : false),
         });

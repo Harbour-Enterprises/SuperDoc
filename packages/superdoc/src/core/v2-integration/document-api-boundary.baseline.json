@@ -1,0 +1,51 @@
+{
+  "components/CommentsLayer/CommentDialog.vue": {
+    "host": 1,
+    "reviewBridge": 6,
+    "v1": 6
+  },
+  "composables/use-link-popover.js": {
+    "host": 1,
+    "handles": 1
+  },
+  "core/editor-runtime/v2/v2-editor-runtime-adapter.ts": {
+    "handles": 2
+  },
+  "core/SuperDoc.ts": {
+    "host": 2,
+    "reviewBridge": 3
+  },
+  "internal/toolbar/built-in-toolbar.js": {
+    "firstParty": 2
+  },
+  "internal/toolbar/built-in/default-items.js": {
+    "firstParty": 6
+  },
+  "internal/toolbar/built-in/LinkInput.vue": {
+    "firstParty": 2
+  },
+  "public/ui/create-super-doc-ui.ts": {
+    "host": 65,
+    "handles": 16,
+    "editCommands": 17,
+    "reviewBridge": 23,
+    "firstParty": 45
+  },
+  "public/ui/watermark-controller.ts": {
+    "host": 3
+  },
+  "stores/comments-store.js": {
+    "host": 1,
+    "handles": 1,
+    "reviewBridge": 3,
+    "v1": 29
+  },
+  "SuperDoc.vue": {
+    "host": 1,
+    "handles": 4,
+    "editCommands": 3,
+    "reviewBridge": 4,
+    "firstParty": 14,
+    "v1": 1
+  }
+}

@@ -8,42 +8,9 @@ import { DOCUMENT_EDITOR_SELECTION_SOURCE } from '@superdoc/helpers/selection-so
 
 export const COMMENT_RECONCILIATION_TOKEN = Symbol('comment-reconciliation');
 
-const getCommentIds = (comment) =>
-  [comment?.commentId, comment?.importedId].filter((id) => id != null).map((id) => String(id));
-
 const readOnlyMutationOutcome = () => ({ ok: false, reason: 'read-only-document' });
 const commentsAreReadOnly = (superdoc) =>
   superdoc?.commentsStore?.getConfig?.readOnly === true || superdoc?.config?.modules?.comments?.readOnly === true;
-
-function getThreadDescendants(superdoc, rootComment) {
-  const store = superdoc?.commentsStore;
-  if (!store) return [];
-  const raw = store.commentsList;
-  const list = Array.isArray(raw) ? raw : (raw?.value ?? []);
-  const threadIds = new Set(getCommentIds(rootComment));
-  const descendants = [];
-  let expanded = true;
-
-  while (expanded) {
-    expanded = false;
-    for (const comment of list) {
-      if (!comment) continue;
-      const ids = getCommentIds(comment);
-      if (ids.some((id) => threadIds.has(id))) continue;
-
-      const parentIds = [comment.parentCommentId, comment.threadingParentCommentId]
-        .filter((id) => id != null)
-        .map((id) => String(id));
-      if (!parentIds.some((id) => threadIds.has(id))) continue;
-
-      descendants.push(comment);
-      ids.forEach((id) => threadIds.add(id));
-      expanded = true;
-    }
-  }
-
-  return descendants;
-}
 
 /**
  * Comment composable
@@ -149,33 +116,6 @@ export default function useComment(params) {
 
     const emitData = { type: comments_module_events.RESOLVED, comment: getValues() };
     propagateUpdate(superdoc, emitData);
-
-    const commands = superdoc.activeEditor?.commands;
-
-    // Tracked-change comments are standalone — resolve only this comment.
-    if (trackedChange.value) {
-      commands?.resolveComment({ commentId, importedId });
-      return;
-    }
-
-    // Replies can carry their own reconstructed anchor marks. Convert the
-    // whole thread in one editor transaction so resolved text stops rendering
-    // as open while the root remains the thread-level resolved state.
-    const replies = getThreadDescendants(superdoc, { commentId, importedId });
-    if (replies.length && typeof commands?.resolveCommentThread === 'function') {
-      commands.resolveCommentThread({
-        comments: [
-          { commentId, importedId, preserveAnchor: true },
-          ...replies.map((reply) => ({
-            commentId: reply.commentId,
-            importedId: reply.importedId,
-            preserveAnchor: false,
-          })),
-        ],
-      });
-    } else {
-      commands?.resolveComment({ commentId, importedId });
-    }
   };
 
   /**
@@ -200,22 +140,6 @@ export default function useComment(params) {
       comment: getValues(),
     };
     propagateUpdate(superdoc, emitData);
-
-    const activeEditor = superdoc.activeEditor;
-    if (!activeEditor) return;
-
-    activeEditor.commands.setCommentInternal({ commentId, importedId, isInternal: newIsInternal });
-  };
-
-  /**
-   * Set this comment as the active comment in the editor
-   *
-   * @param {Object} superdoc The SuperDoc instance
-   * @returns {void}
-   */
-  const setActive = (superdoc) => {
-    const { activeEditor } = superdoc;
-    activeEditor?.commands.setActiveComment({ commentId, importedId });
   };
 
   /**
@@ -445,7 +369,6 @@ export default function useComment(params) {
     getValues,
     resolveComment,
     setIsInternal,
-    setActive,
     updatePosition,
     getCommentUser,
     updateIdentityValues,

@@ -124,29 +124,4 @@ describe('use-comment', () => {
 
     expect(comment.getValues().customAttributes).toEqual(customAttributes);
   });
-
-  it('resolves thread descendants through comment and imported-id parent aliases', () => {
-    const resolveCommentThread = vi.fn();
-    const root = useComment({ commentId: 'root', importedId: 'imported-root' });
-    const directReply = useComment({ commentId: 'reply-1', parentCommentId: 'imported-root' });
-    const nestedReply = useComment({ commentId: 'reply-2', threadingParentCommentId: 'reply-1' });
-
-    const superdoc = {
-      activeEditor: { commands: { resolveCommentThread, resolveComment: vi.fn() } },
-      commentsStore: { commentsList: [root, directReply, nestedReply] },
-      config: { modules: { comments: false } },
-      emit: vi.fn(),
-      isCollaborative: false,
-    };
-
-    root.resolveComment({ id: 'user-1', email: 'user@example.com', name: 'User', superdoc });
-
-    expect(resolveCommentThread).toHaveBeenCalledWith({
-      comments: [
-        { commentId: 'root', importedId: 'imported-root', preserveAnchor: true },
-        { commentId: 'reply-1', importedId: undefined, preserveAnchor: false },
-        { commentId: 'reply-2', importedId: undefined, preserveAnchor: false },
-      ],
-    });
-  });
 });

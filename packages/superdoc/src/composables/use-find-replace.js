@@ -34,73 +34,7 @@ const DEFAULT_TEXTS = {
   ignoreDiacriticsAriaLabel: 'Ignore diacritics',
 };
 
-/**
- * @typedef {Object} SearchResult The shape of `setSearchSession`,
- *   `nextSearchMatch`, `previousSearchMatch`, `replaceSearchMatch` returns.
- *   The Search extension is renderer-owned; this composable only consumes
- *   the two fields below.
- * @property {{ length: number }[]} matches
- * @property {number} activeMatchIndex
- */
-
-/**
- * @typedef {Object} SearchCommands The search command subset consumed here.
- * @property {() => void} clearSearchSession
- * @property {(query: string, options: { caseSensitive: boolean, ignoreDiacritics: boolean, highlight: boolean, searchModel: 'raw' | 'visible' }) => SearchResult} setSearchSession
- * @property {() => SearchResult} nextSearchMatch
- * @property {() => SearchResult} previousSearchMatch
- * @property {(replacement: string) => SearchResult} replaceSearchMatch
- * @property {(replacement: string) => void} replaceAllSearchMatches
- */
-
-/**
- * @typedef {import('../core/types/index.js').Editor & {
- *   commands: SearchCommands,
- *   extensionStorage?: Record<string, unknown>,
- *   storage?: Record<string, unknown>
- * }} SearchEditor
- */
-
-/**
- * @typedef {Object} SearchStorage The Search extension's storage shape.
- *   The Search extension is renderer-owned; this composable only
- *   needs the fields it reads to detect a live search session and resync
- *   from external mutations.
- * @property {unknown} [searchIndex]
- * @property {unknown} [searchResults]
- * @property {number} [activeMatchIndex]
- * @property {{ length: number }[]} [matches]
- */
-
-/**
- * Resolve the Search extension storage from the editor.
- * The storage is keyed by extension name in editor.extensionStorage;
- * we find it by looking for the object with our known storage shape.
- * @param {SearchEditor | null | undefined} editor
- * @returns {SearchStorage | null}
- */
-function getSearchStorage(editor) {
-  if (!editor) return null;
-
-  // Try direct access by common name first. The Search storage shape is local
-  // to the renderer, so cast to the subset this composable consumes.
-  const extensionStorage = /** @type {Record<string, unknown> | undefined} */ (editor.extensionStorage);
-  const storage = /** @type {Record<string, unknown> | undefined} */ (editor.storage);
-  const byName = /** @type {SearchStorage | undefined} */ (extensionStorage?.Search ?? storage?.Search);
-  if (byName?.searchIndex || byName?.searchResults) return byName;
-
-  // Fall back to scanning extensionStorage for the Search extension's storage
-  const store = editor.extensionStorage ?? editor.storage;
-  if (store) {
-    for (const key of Object.keys(store)) {
-      const val = /** @type {Record<string, unknown>} */ (store)[key];
-      if (val && typeof val === 'object' && 'searchIndex' in val && 'searchResults' in val) {
-        return /** @type {SearchStorage} */ (val);
-      }
-    }
-  }
-  return null;
-}
+/** @typedef {import('../core/types/index.js').Editor} Editor */
 
 /**
  * Composable that manages a find/replace floating surface.
@@ -111,12 +45,12 @@ function getSearchStorage(editor) {
  *
  * @param {Object} options
  * @param {() => import('../core/surface-manager.js').SurfaceManager | null} options.getSurfaceManager
- * @param {() => SearchEditor | null} options.getActiveEditor
+ * @param {() => Editor | null} options.getActiveEditor
  * @param {import('vue').Ref} [options.activeEditorRef] - Reactive ref to the active editor (for watching switches)
  * @param {() => boolean | FindReplaceConfig | undefined} [options.getFindReplaceConfig] - Config getter
  * @param {() => { search?: any } | null | undefined} [options.getSuperDocUI] - Getter for the
- *   SuperDoc-owned UI controller (`superdoc.ui`). Its `.search` slice is the single V2
- *   find/replace session authority; the V2 driver never touches `editor.commands`.
+ *   SuperDoc-owned UI controller (`superdoc.ui`). Its `.search` slice is the single
+ *   find/replace session authority.
  */
 export function useFindReplace({
   getSurfaceManager,
@@ -129,14 +63,14 @@ export function useFindReplace({
 
   /** @type {import('../core/surface-manager.js').SurfaceHandle | null} */
   let currentSurfaceHandle = null;
-  /** @type {SearchEditor | null} */
+  /** @type {Editor | null} */
   let currentEditor = null;
   /**
-   * The V2 `ui.search` handle for the current session, or null when the active
-   * editor is V1 (command-backed). Set at open() time based on the editor.
+   * The `ui.search` handle for the current session, or null when the host
+   * exposes none. Set at open() time.
    * @type {any}
    */
-  let currentV2Search = null;
+  let currentSearch = null;
   let destroyed = false;
   let opening = false; // sync guard against double-open across the await gap
 
@@ -154,26 +88,23 @@ export function useFindReplace({
   const replaceText = ref('');
   const caseSensitive = ref(false);
   const ignoreDiacritics = ref(false);
-  // Regex search is a V2 (ui.search) capability; the V1 driver hides the
-  // toggle (see regexSupported below).
   const regex = ref(false);
   const showReplace = ref(false);
   const matchCount = ref(0);
   const activeMatchIndex = ref(-1);
-  // Whether replace can mutate right now. V1 leaves this true (the static
-  // `replaceEnabled` config governs V1); the V2 driver drives it from the host
-  // search session so viewing/read-only mode disables the replace controls.
+  // Whether replace can mutate right now. Driven from the host search session
+  // so viewing/read-only mode disables the replace controls.
   const canReplaceState = ref(true);
-  // Whether replace-all can run right now. The V2 host reports it separately:
+  // Whether replace-all can run right now. The host reports it separately:
   // a truncated session still replaces the active match but refuses to replace
-  // every match it could not enumerate. V1 leaves this true.
+  // every match it could not enumerate.
   const canReplaceAllState = ref(true);
   // Re-entrancy guard so a repeated click cannot issue overlapping mutations.
   const replacePending = ref(false);
-  // V1 supports ignore-diacritics search; V2 (Document API query) does not, so
-  // the V2 driver hides that toggle instead of shipping a no-op control.
-  const ignoreDiacriticsSupported = ref(true);
-  // Regex search ships on the V2 driver only; V1 hides the toggle.
+  // The host search session has no ignore-diacritics mode, so surfaces hide
+  // that toggle instead of shipping a no-op control.
+  const ignoreDiacriticsSupported = ref(false);
+  // Regex search needs a host search session (see open()).
   const regexSupported = ref(false);
   // Inline error label when the current regex pattern is invalid/unsafe.
   /** @type {import('vue').Ref<string | null>} */
@@ -191,8 +122,8 @@ export function useFindReplace({
   const hasMatches = computed(() => matchCount.value > 0);
 
   // Whether the replace controls should be enabled: there are matches, replace
-  // is not in flight, and the active session allows mutation (V2 read-only mode
-  // sets `canReplaceState` false; V1 keeps it true).
+  // is not in flight, and the active session allows mutation (read-only mode
+  // sets `canReplaceState` false).
   const canReplaceComputed = computed(() => hasMatches.value && !replacePending.value && canReplaceState.value);
   // Replace all additionally needs the session to enumerate every match.
   const canReplaceAllComputed = computed(() => canReplaceComputed.value && canReplaceAllState.value);
@@ -204,23 +135,13 @@ export function useFindReplace({
   /** @type {ReturnType<typeof setInterval> | null} */
   let syncInterval = null;
 
-  // ---- driver detection -----------------------------------------------------
+  // ---- search session -------------------------------------------------------
 
   /**
-   * A V1 editor exposes the command-backed search session API. The V2 active
-   * editor facade carries no `commands`, so absence of `setSearchSession`
-   * selects the V2 (`ui.search`) driver.
-   * @param {any} editor
-   */
-  function isV1Editor(editor) {
-    return typeof editor?.commands?.setSearchSession === 'function';
-  }
-
-  /**
-   * Resolve the V2 `ui.search` handle when available. Never throws.
+   * Resolve the `ui.search` handle when available. Never throws.
    * @returns {any}
    */
-  function resolveV2Search() {
+  function resolveSearch() {
     try {
       const ui = typeof getSuperDocUI === 'function' ? getSuperDocUI() : null;
       const search = ui?.search;
@@ -231,10 +152,10 @@ export function useFindReplace({
   }
 
   /**
-   * Sync the reactive match state from the current V2 host search snapshot.
+   * Sync the reactive match state from the current host search snapshot.
    * @param {any} slice
    */
-  function applyV2Slice(slice) {
+  function applySlice(slice) {
     if (!slice) return;
     matchCount.value = typeof slice.total === 'number' ? slice.total : 0;
     activeMatchIndex.value = typeof slice.activeIndex === 'number' ? slice.activeIndex : -1;
@@ -248,40 +169,7 @@ export function useFindReplace({
   // ---- search logic ---------------------------------------------------------
 
   function runSearch() {
-    if (currentV2Search) {
-      runV2Search();
-      return;
-    }
-    if (!currentEditor) return;
-    if (!findQuery.value) {
-      try {
-        currentEditor.commands.clearSearchSession();
-      } catch {
-        /* destroyed */
-      }
-      matchCount.value = 0;
-      activeMatchIndex.value = -1;
-      return;
-    }
-
-    try {
-      const result = /** @type {SearchResult} */ (
-        currentEditor.commands.setSearchSession(findQuery.value, {
-          caseSensitive: caseSensitive.value,
-          ignoreDiacritics: ignoreDiacritics.value,
-          highlight: true,
-          searchModel: resolveConfig().includeDeletedText ? 'raw' : 'visible',
-        })
-      );
-      matchCount.value = result.matches.length;
-      activeMatchIndex.value = result.activeMatchIndex;
-    } catch {
-      /* editor may be destroyed */
-    }
-  }
-
-  function runV2Search() {
-    const search = currentV2Search;
+    const search = currentSearch;
     if (!search) return;
     if (!findQuery.value) {
       try {
@@ -304,7 +192,7 @@ export function useFindReplace({
         typeof search.find === 'function'
           ? search.find(findQuery.value, { ...commonOptions, includeTrackedDeletions })
           : search.search(findQuery.value, { ...commonOptions, includeDeletedText: includeTrackedDeletions });
-      applyV2Slice(slice);
+      applySlice(slice);
     } catch {
       /* host may be gone */
     }
@@ -337,41 +225,23 @@ export function useFindReplace({
 
   function goNext() {
     if (!hasMatches.value) return;
-    if (currentV2Search) {
-      try {
-        currentV2Search.next();
-        applyV2Slice(currentV2Search.getSnapshot());
-      } catch {
-        /* host gone */
-      }
-      return;
-    }
-    if (!currentEditor) return;
+    if (!currentSearch) return;
     try {
-      const result = /** @type {SearchResult} */ (currentEditor.commands.nextSearchMatch());
-      activeMatchIndex.value = result.activeMatchIndex;
+      currentSearch.next();
+      applySlice(currentSearch.getSnapshot());
     } catch {
-      /* destroyed */
+      /* host gone */
     }
   }
 
   function goPrev() {
     if (!hasMatches.value) return;
-    if (currentV2Search) {
-      try {
-        currentV2Search.previous();
-        applyV2Slice(currentV2Search.getSnapshot());
-      } catch {
-        /* host gone */
-      }
-      return;
-    }
-    if (!currentEditor) return;
+    if (!currentSearch) return;
     try {
-      const result = /** @type {SearchResult} */ (currentEditor.commands.previousSearchMatch());
-      activeMatchIndex.value = result.activeMatchIndex;
+      currentSearch.previous();
+      applySlice(currentSearch.getSnapshot());
     } catch {
-      /* destroyed */
+      /* host gone */
     }
   }
 
@@ -379,40 +249,30 @@ export function useFindReplace({
     if (!currentReplaceEnabled) return;
     if (replacePending.value) return;
     if (!hasMatches.value) return;
-    if (currentV2Search) {
-      if (!canReplaceState.value) return;
-      const search = currentV2Search;
-      replacePending.value = true;
-      const finish = createReplaceContinuation(search, {
-        getCurrentSession: () => currentV2Search,
-        applySlice: applyV2Slice,
-        onSettled: () => {
-          replacePending.value = false;
-        },
-      });
-      let result = null;
-      try {
-        result = search.replace(replaceText.value);
-      } catch {
-        /* host gone */
-      }
-      // Worker-backed replace resolves asynchronously. Hold the pending flag
-      // (which disables the replace controls) until the mutation settles so a
-      // second click cannot start a concurrent replace.
-      if (result && typeof result.then === 'function') {
-        void Promise.resolve(result).then(finish, finish);
-      } else {
-        finish();
-      }
-      return;
-    }
-    if (!currentEditor) return;
+    if (!currentSearch) return;
+    if (!canReplaceState.value) return;
+    const search = currentSearch;
+    replacePending.value = true;
+    const finish = createReplaceContinuation(search, {
+      getCurrentSession: () => currentSearch,
+      applySlice,
+      onSettled: () => {
+        replacePending.value = false;
+      },
+    });
+    let result = null;
     try {
-      const result = /** @type {SearchResult} */ (currentEditor.commands.replaceSearchMatch(replaceText.value));
-      matchCount.value = result.matches.length;
-      activeMatchIndex.value = result.activeMatchIndex;
+      result = search.replace(replaceText.value);
     } catch {
-      /* destroyed */
+      /* host gone */
+    }
+    // Worker-backed replace resolves asynchronously. Hold the pending flag
+    // (which disables the replace controls) until the mutation settles so a
+    // second click cannot start a concurrent replace.
+    if (result && typeof result.then === 'function') {
+      void Promise.resolve(result).then(finish, finish);
+    } else {
+      finish();
     }
   }
 
@@ -420,68 +280,47 @@ export function useFindReplace({
     if (!currentReplaceEnabled) return;
     if (replacePending.value) return;
     if (!hasMatches.value) return;
-    if (currentV2Search) {
-      if (!canReplaceState.value || !canReplaceAllState.value) return;
-      const search = currentV2Search;
-      replacePending.value = true;
-      const finish = createReplaceContinuation(search, {
-        getCurrentSession: () => currentV2Search,
-        applySlice: applyV2Slice,
-        onSettled: () => {
-          replacePending.value = false;
-        },
-      });
-      let result = null;
-      try {
-        result = search.replaceAll(replaceText.value);
-      } catch {
-        /* host gone */
-      }
-      // Worker-backed replace-all resolves asynchronously. Hold the pending
-      // flag (which disables the replace controls) until the mutations settle
-      // so a second click cannot start a concurrent replace-all.
-      if (result && typeof result.then === 'function') {
-        void Promise.resolve(result).then(finish, finish);
-      } else {
-        finish();
-      }
-      return;
-    }
-    if (!currentEditor) return;
+    if (!currentSearch) return;
+    if (!canReplaceState.value || !canReplaceAllState.value) return;
+    const search = currentSearch;
+    replacePending.value = true;
+    const finish = createReplaceContinuation(search, {
+      getCurrentSession: () => currentSearch,
+      applySlice,
+      onSettled: () => {
+        replacePending.value = false;
+      },
+    });
+    let result = null;
     try {
-      currentEditor.commands.replaceAllSearchMatches(replaceText.value);
-      matchCount.value = 0;
-      activeMatchIndex.value = -1;
+      result = search.replaceAll(replaceText.value);
     } catch {
-      /* destroyed */
+      /* host gone */
+    }
+    // Worker-backed replace-all resolves asynchronously. Hold the pending
+    // flag (which disables the replace controls) until the mutations settle
+    // so a second click cannot start a concurrent replace-all.
+    if (result && typeof result.then === 'function') {
+      void Promise.resolve(result).then(finish, finish);
+    } else {
+      finish();
     }
   }
 
   // ---- polling --------------------------------------------------------------
 
-  function syncFromEditorStorage() {
-    if (currentV2Search) {
-      try {
-        applyV2Slice(currentV2Search.getSnapshot());
-      } catch {
-        /* host gone */
-      }
-      return;
+  function syncFromSearchSession() {
+    if (!currentSearch) return;
+    try {
+      applySlice(currentSearch.getSnapshot());
+    } catch {
+      /* host gone */
     }
-    const storage = getSearchStorage(currentEditor);
-    if (!storage) return;
-
-    const results = storage.searchResults;
-    const count = Array.isArray(results) ? results.length : 0;
-    const idx = storage.activeMatchIndex ?? -1;
-
-    if (count !== matchCount.value) matchCount.value = count;
-    if (idx !== activeMatchIndex.value) activeMatchIndex.value = idx;
   }
 
   function startPolling() {
     stopPolling();
-    syncInterval = setInterval(syncFromEditorStorage, 200);
+    syncInterval = setInterval(syncFromSearchSession, 200);
   }
 
   function stopPolling() {
@@ -628,7 +467,7 @@ export function useFindReplace({
       hasMatches,
       canReplace: canReplaceComputed,
       /**
-       * `canReplace` plus the session enumerating every match. A truncated V2
+       * `canReplace` plus the session enumerating every match. A truncated
        * session keeps Replace enabled and disables Replace all.
        */
       canReplaceAll: canReplaceAllComputed,
@@ -748,25 +587,15 @@ export function useFindReplace({
   // ---- public API -----------------------------------------------------------
 
   /**
-   * Clear the search session on the given editor, swallowing errors
-   * (the editor may already be destroyed).
-   * @param {SearchEditor | null | undefined} editor
+   * Clear the host search session (query, matches, highlights) when the given
+   * editor is the current one, swallowing errors (the host may be gone).
+   * @param {Editor | null | undefined} editor
    */
   function clearEditorSession(editor) {
     if (!editor) return;
-    if (typeof editor?.commands?.clearSearchSession === 'function') {
+    if (currentSearch && editor === currentEditor) {
       try {
-        editor.commands.clearSearchSession();
-      } catch {
-        /* destroyed */
-      }
-      return;
-    }
-    // V2: clear the host search session (query, matches, highlights) when this
-    // is the active V2 editor.
-    if (currentV2Search && editor === currentEditor) {
-      try {
-        currentV2Search.clear();
+        currentSearch.clear();
       } catch {
         /* host gone */
       }
@@ -795,18 +624,15 @@ export function useFindReplace({
       const resolution = resolveRendering(config, resolverCtx);
       if (resolution.suppressed) return false;
 
-      // V2: only claim the shortcut when the host actually exposes a usable
-      // search facade. Otherwise fall through so browser-native Cmd+F still
-      // works (worker/pre-ready hosts, or builds without the search substrate).
-      const editor = getActiveEditor();
-      if (!isV1Editor(editor)) {
-        const search = resolveV2Search();
-        if (!search) return false;
-        try {
-          if (search.getSnapshot?.().available !== true) return false;
-        } catch {
-          return false;
-        }
+      // Only claim the shortcut when the host actually exposes a usable search
+      // facade. Otherwise fall through so browser-native Cmd+F still works
+      // (worker/pre-ready hosts, or builds without the search substrate).
+      const search = resolveSearch();
+      if (!search) return false;
+      try {
+        if (search.getSnapshot?.().available !== true) return false;
+      } catch {
+        return false;
       }
       return true;
     } catch {
@@ -878,16 +704,13 @@ export function useFindReplace({
         clearEditorSession(currentEditor);
       }
       currentEditor = editor;
-      // Bind the driver: V1 command-backed editors use `editor.commands`; V2
-      // routes through the host search session via `ui.search`.
-      currentV2Search = isV1Editor(editor) ? null : resolveV2Search();
-      ignoreDiacriticsSupported.value = !currentV2Search;
-      regexSupported.value = Boolean(currentV2Search);
+      currentSearch = resolveSearch();
+      regexSupported.value = Boolean(currentSearch);
       // Seed session mutability from the live snapshot so read-only mode hides
       // the replace controls on open instead of after the first query/poll.
-      if (currentV2Search) {
+      if (currentSearch) {
         try {
-          applyV2Slice(currentV2Search.getSnapshot());
+          applySlice(currentSearch.getSnapshot());
         } catch {
           /* host gone */
         }
@@ -955,8 +778,7 @@ export function useFindReplace({
         if (currentEditor !== freshEditor) {
           clearEditorSession(currentEditor);
           currentEditor = freshEditor;
-          currentV2Search = isV1Editor(freshEditor) ? null : resolveV2Search();
-          ignoreDiacriticsSupported.value = !currentV2Search;
+          currentSearch = resolveSearch();
         }
 
         surfaceHandle = manager.open({
@@ -1030,7 +852,7 @@ export function useFindReplace({
     stopPolling();
     close();
     currentEditor = null;
-    currentV2Search = null;
+    currentSearch = null;
     focusFindInputFn = null;
   }
 

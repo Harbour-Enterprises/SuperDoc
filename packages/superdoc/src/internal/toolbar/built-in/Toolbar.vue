@@ -183,9 +183,7 @@ const restoreSelection = () => {
   const capture = proxy.$toolbar.pendingSelectionCapture ?? pendingSelectionCapture;
   if (capture && typeof proxy.$toolbar.ui?.selection?.restore === 'function') {
     proxy.$toolbar.ui.selection.restore(capture);
-    return;
   }
-  editor.commands?.restoreSelection?.();
 };
 
 const handleToolbarMousedown = (e) => {

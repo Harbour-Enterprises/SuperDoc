@@ -34,7 +34,7 @@ import { isAllowed } from './collaboration/permissions.js';
 import { Whiteboard } from './whiteboard/Whiteboard';
 import { WhiteboardRenderer } from './whiteboard/WhiteboardRenderer';
 import { SurfaceManager } from './surface-manager.js';
-import { createDeprecatedEditorProxy } from '../helpers/deprecation.js';
+import { createDeprecatedEditorProxy, warnOnce } from '../helpers/deprecation.js';
 import { normalizeTrackChangesConfig } from './helpers/normalize-track-changes-config.js';
 import { DEFAULT_SUPERDOC_USER as DEFAULT_USER, normalizeSuperDocUser } from './helpers/normalize-user.js';
 import { normalizeUiConfig } from './config/normalize-ui-config.js';
@@ -3940,42 +3940,28 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
     }
   }
   /**
-   * Search for text or regex in the active editor.
+   * Not supported in superdoc@2: always returns `undefined`.
    *
-   * Returns `undefined` when there is no active editor; otherwise
-   * returns the array of matches the underlying search command produced
-   * (possibly empty).
-   *
-   * @param text The text or regex to search for
-   * @returns The search results, or `undefined` when there is no active editor
-   *   or the active legacy projection exposes no `search` command (e.g. a
-   *   v2-shaped runtime with `commands: null`).
+   * @deprecated replaceWith=`superdoc.ui.search` removeIn=v3.0
+   * @param _text The text or regex to search for.
    */
-  search(text: string | RegExp): SearchMatch[] | undefined {
-    const commands = this.activeEditor?.commands;
-    const search = commands?.search;
-    if (typeof search !== 'function') return undefined;
-    return search.call(commands, text, { searchModel: 'visible' });
+  search(_text: string | RegExp): SearchMatch[] | undefined {
+    warnOnce('superdoc.search', '[SuperDoc] search() is not supported in superdoc@2. Use superdoc.ui.search.');
+    return undefined;
   }
 
   /**
-   * Go to the next search result.
+   * Not supported in superdoc@2: always returns `undefined`.
    *
-   * Pass back a match returned by `superdoc.search()` unchanged; the
-   * runtime resolves its current document position via the embedded
-   * tracker ids.
-   *
-   * @param match The match object returned by `superdoc.search()`.
-   * @returns Whether the command dispatched, or `undefined` when there is no
-   *   active editor or the active legacy projection exposes no
-   *   `goToSearchResult` command (e.g. a v2-shaped runtime with `commands:
-   *   null`).
+   * @deprecated replaceWith=`superdoc.ui.search.next()` removeIn=v3.0
+   * @param _match A match returned by `search()`.
    */
-  goToSearchResult(match: SearchMatch): boolean | undefined {
-    const commands = this.activeEditor?.commands;
-    const goToSearchResult = commands?.goToSearchResult;
-    if (typeof goToSearchResult !== 'function') return undefined;
-    return Boolean(goToSearchResult.call(commands, match));
+  goToSearchResult(_match: SearchMatch): boolean | undefined {
+    warnOnce(
+      'superdoc.goToSearchResult',
+      '[SuperDoc] goToSearchResult() is not supported in superdoc@2. Use superdoc.ui.search.next().',
+    );
+    return undefined;
   }
 
   /**
@@ -4174,19 +4160,17 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   }
 
   /**
-   * Get the HTML content of all editors
-   * @returns The HTML content of all editors
+   * Not supported in superdoc@2: always returns `[]` and exports nothing.
+   *
+   * @deprecated replaceWith=`await superdoc.activeEditor.doc.getHtml({})` removeIn=v3.0
+   * @param _options Ignored.
    */
-  getHTML(options: Parameters<Editor['getHTML']>[0] = {}) {
-    const editors: Editor[] = [];
-    this.#requireSuperdocStore('getHTML').documents.forEach((doc: RuntimeDocument) => {
-      const editor = doc.getEditor?.();
-      if (editor) {
-        editors.push(editor);
-      }
-    });
-
-    return editors.map((editor) => editor.getHTML(options));
+  getHTML(_options: Parameters<Editor['getHTML']>[0] = {}): unknown[] {
+    warnOnce(
+      'superdoc.getHTML',
+      '[SuperDoc] getHTML() is not supported in superdoc@2 and returns []. Use await superdoc.activeEditor.doc.getHtml({}).',
+    );
+    return [];
   }
 
   /**

@@ -859,9 +859,7 @@ const onContentError = ({ error, documentId }) => {
 };
 
 const exportHTML = async () => {
-  // Get HTML content from SuperDoc
-  const htmlArray = superdoc.value.getHTML();
-  const html = htmlArray.join('');
+  const html = (await superdoc.value.activeEditor?.doc?.getHtml?.({})) ?? '';
 
   // Create a Blob from the HTML
   const blob = new Blob([html], { type: 'text/html' });

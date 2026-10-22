@@ -55,9 +55,7 @@ describe('SuperDoc API contract', () => {
     });
 
     it('has getHTML() method', () => {
-      // webview/main.js: editorInstance.getHTML()
-      // SuperDoc.getHTML delegates to editor.getHTML — both have it
-      expect(superdocClassSrc).toMatch(/getHTML\s*\(options/);
+      expect(superdocClassSrc).toMatch(/\bgetHTML\s*\(/);
     });
 
     it('has activeEditor property', () => {

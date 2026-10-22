@@ -8,16 +8,7 @@ import useComment from './use-comment.js';
 import { syncCommentsToClients } from '@superdoc/core/collaboration/helpers.js';
 import { DOCUMENT_EDITOR_SELECTION_SOURCE } from '@superdoc/helpers/selection-source';
 
-const makeSuperdoc = () => ({
-  emit: vi.fn(),
-  activeEditor: {
-    commands: {
-      resolveComment: vi.fn(),
-      setCommentInternal: vi.fn(),
-      setActiveComment: vi.fn(),
-    },
-  },
-});
+const makeSuperdoc = () => ({ emit: vi.fn(), activeEditor: null });
 
 describe('use-comment: extended coverage', () => {
   beforeEach(() => {
@@ -40,8 +31,6 @@ describe('use-comment: extended coverage', () => {
     expect(comment.isInternal).toBe(true);
     expect(comment.commentText).toBe('Original');
     expect(superdoc.emit).not.toHaveBeenCalled();
-    expect(superdoc.activeEditor.commands.resolveComment).not.toHaveBeenCalled();
-    expect(superdoc.activeEditor.commands.setCommentInternal).not.toHaveBeenCalled();
   });
 
   describe('resolveComment', () => {
@@ -57,7 +46,6 @@ describe('use-comment: extended coverage', () => {
         'comments-update',
         expect.objectContaining({ type: expect.any(String) }),
       );
-      expect(superdoc.activeEditor.commands.resolveComment).toHaveBeenCalled();
     });
 
     it('is a no-op when already resolved', () => {
@@ -74,7 +62,6 @@ describe('use-comment: extended coverage', () => {
       const superdoc = makeSuperdoc();
       c.resolveComment({ id: 'alice-id', email: 'a@b.com', name: 'Alice', superdoc });
       expect(superdoc.emit).toHaveBeenCalled();
-      expect(superdoc.activeEditor.commands.resolveComment).toHaveBeenCalled();
     });
   });
 
@@ -85,9 +72,6 @@ describe('use-comment: extended coverage', () => {
       c.setIsInternal({ isInternal: false, superdoc });
       expect(c.isInternal).toBe(false);
       expect(superdoc.emit).toHaveBeenCalled();
-      expect(superdoc.activeEditor.commands.setCommentInternal).toHaveBeenCalledWith(
-        expect.objectContaining({ isInternal: false }),
-      );
     });
 
     it('short-circuits when value is unchanged', () => {
@@ -95,30 +79,6 @@ describe('use-comment: extended coverage', () => {
       const superdoc = makeSuperdoc();
       c.setIsInternal({ isInternal: true, superdoc });
       expect(superdoc.emit).not.toHaveBeenCalled();
-    });
-
-    it('does not call editor commands when activeEditor is missing', () => {
-      const c = useComment({ commentId: 'c-1', isInternal: true });
-      const superdoc = { emit: vi.fn(), activeEditor: null };
-      c.setIsInternal({ isInternal: false, superdoc });
-      expect(superdoc.emit).toHaveBeenCalled();
-      expect(c.isInternal).toBe(false);
-    });
-  });
-
-  describe('setActive', () => {
-    it('invokes setActiveComment on the active editor', () => {
-      const c = useComment({ commentId: 'c-1' });
-      const superdoc = makeSuperdoc();
-      c.setActive(superdoc);
-      expect(superdoc.activeEditor.commands.setActiveComment).toHaveBeenCalledWith(
-        expect.objectContaining({ commentId: 'c-1' }),
-      );
-    });
-
-    it('is a no-op when no active editor', () => {
-      const c = useComment({ commentId: 'c-1' });
-      expect(() => c.setActive({ activeEditor: null })).not.toThrow();
     });
   });
 
