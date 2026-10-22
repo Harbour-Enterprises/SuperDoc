@@ -1,26 +1,137 @@
 import { ref, reactive } from 'vue';
 import { v4 as uuidv4 } from 'uuid';
+import type { TrackChangeCustomAttribute, TrackChangeImagePreview } from '@superdoc/document-api';
 
-import { syncCommentsToClients } from '@superdoc/core/collaboration/helpers.js';
-import { comments_module_events } from '@superdoc/common';
-import useSelection from '@superdoc/helpers/use-selection';
-import { DOCUMENT_EDITOR_SELECTION_SOURCE } from '@superdoc/helpers/selection-source';
+import { syncCommentsToClients } from '../../core/collaboration/helpers.js';
+import {
+  comments_module_events,
+  type CommentEvent,
+  type Comment as CommonComment,
+  type CommentThreadingStyle,
+} from '@superdoc/common';
+import useSelection from '../../helpers/use-selection.js';
+import { DOCUMENT_EDITOR_SELECTION_SOURCE } from '../../helpers/selection-source.js';
+import type { Modules, StoryLocator } from '../../core/types/index.js';
 
 export const COMMENT_RECONCILIATION_TOKEN = Symbol('comment-reconciliation');
 
-const readOnlyMutationOutcome = () => ({ ok: false, reason: 'read-only-document' });
-const commentsAreReadOnly = (superdoc) =>
-  superdoc?.commentsStore?.getConfig?.readOnly === true || superdoc?.config?.modules?.comments?.readOnly === true;
+type ReadOnlyMutationOutcome = { ok: false; reason: 'read-only-document' };
+
+type TrackedChangeDecision = 'accept' | 'reject';
+
+type SelectionBounds = { top: number; left: number; right: number; bottom: number };
+
+type CommentMention = { name?: string | null; email?: string | null };
+
+type CommentAuthor = { name?: string | null; email?: string | null };
+
+type TrackedChangeDetailLine = { excerpt: string; label: string };
+
+type CommentSelectionParams = {
+  documentId?: string | null;
+  page?: number;
+  selectionBounds?: Partial<SelectionBounds> | null;
+  source?: string | null;
+};
+
+type SelectionState = ReturnType<typeof useSelection>;
+
+type CommentSelection = Omit<SelectionState, 'source'> & { source: SelectionState['source'] | string };
+
+type CommentChange = { key: string; value: unknown; previousValue?: unknown };
+
+type CommentsUpdateEvent = {
+  type: CommentEvent;
+  changes?: CommentChange[];
+  comment: unknown;
+};
+
+type CommentsHost = {
+  emit: (event: 'comments-update', payload: CommentsUpdateEvent) => unknown;
+  commentsStore?: { getConfig?: { readOnly?: boolean } };
+  config?: { modules?: Modules };
+};
+
+type CommentIdentity = {
+  commentId?: string;
+  importedId?: string | null;
+  parentCommentId?: string | null;
+  trackedChangeParentId?: string | null;
+  trackedChangeThreadParentId?: string | null;
+  threadingParentCommentId?: string | null;
+};
+
+export type UseCommentParams = CommentIdentity & {
+  uid?: string;
+  trackedChangeSide?: string | null;
+  fileId?: string | null;
+  fileType?: string | null;
+  createdAtVersionNumber?: number | null;
+  isInternal?: boolean;
+  mentions?: CommentMention[];
+  isFocused?: boolean;
+  creatorId?: string | null;
+  creatorEmail?: string | null;
+  creatorName?: string | null;
+  creatorImage?: string | null;
+  createdTime?: number;
+  importedAuthor?: CommentAuthor | null;
+  docxCommentJSON?: unknown;
+  origin?: CommonComment['origin'];
+  threadingMethod?: CommonComment['threadingMethod'];
+  threadingStyleOverride?: CommentThreadingStyle;
+  originalXmlStructure?: CommonComment['originalXmlStructure'];
+  commentText?: string;
+  selection?: CommentSelectionParams;
+  trackedChange?: boolean;
+  trackedChangeType?: string | null;
+  trackedChangeText?: string | null;
+  trackedChangeDisplayType?: string | null;
+  semanticColorKey?: string | null;
+  semanticColor?: string | null;
+  trackedChangeStory?: StoryLocator | null;
+  trackedChangeStoryKind?: string | null;
+  trackedChangeStoryLabel?: string;
+  trackedChangeAnchorKey?: string | null;
+  trackedChangeCanonicalId?: string | null;
+  trackedChangePositionAliases?: string[];
+  deletedText?: string | null;
+  trackedChangeLabel?: string | null;
+  trackedChangeDetailLines?: TrackedChangeDetailLine[] | null;
+  trackedChangeImagePreview?: TrackChangeImagePreview | null;
+  customAttributes?: readonly TrackChangeCustomAttribute[] | null;
+  resolvedTime?: number | null;
+  resolvedById?: string | null;
+  resolvedByEmail?: string | null;
+  resolvedByName?: string | null;
+  trackedChangeDecision?: TrackedChangeDecision | null;
+};
+
+type ResolveCommentParams = {
+  id?: string | null;
+  email?: string | null;
+  name?: string | null;
+  superdoc: CommentsHost;
+  decision?: TrackedChangeDecision;
+  reconciliationToken?: symbol;
+};
+
+type SetTextParams =
+  | { text: string; superdoc?: CommentsHost; suppressUpdate: true }
+  | { text: string; superdoc: CommentsHost; suppressUpdate?: false };
+
+const readOnlyMutationOutcome = (): ReadOnlyMutationOutcome => ({ ok: false, reason: 'read-only-document' });
+const commentsModuleIsReadOnly = (comments: Modules['comments']) => comments !== false && comments?.readOnly === true;
+const commentsAreReadOnly = (superdoc: CommentsHost | undefined) =>
+  superdoc?.commentsStore?.getConfig?.readOnly === true ||
+  commentsModuleIsReadOnly(superdoc?.config?.modules?.comments);
 
 /**
  * Comment composable
- *
- * @param {Object} params The initial values of the comment
- * @returns {Object} The comment composable
  */
-export default function useComment(params) {
+export default function useComment(params: UseCommentParams) {
   const uid = ref(params.uid);
-  let commentId = params.commentId || uuidv4();
+  let commentId: string | undefined = params.commentId || uuidv4();
   let importedId = params.importedId;
   let parentCommentId = params.parentCommentId;
   let trackedChangeParentId = params.trackedChangeParentId;
@@ -31,9 +142,9 @@ export default function useComment(params) {
   const createdAtVersionNumber = params.createdAtVersionNumber;
   const isInternal = ref(params.isInternal !== undefined ? params.isInternal : true);
 
-  const mentions = ref(Array.isArray(params.mentions) ? params.mentions : []);
+  const mentions = ref<CommentMention[]>(Array.isArray(params.mentions) ? params.mentions : []);
 
-  const commentElement = ref(null);
+  const commentElement = ref<HTMLElement | null>(null);
   const isFocused = ref(params.isFocused || false);
 
   const creatorId = ref(params.creatorId ?? null);
@@ -51,7 +162,7 @@ export default function useComment(params) {
 
   const commentText = ref(params.commentText || '');
 
-  const selection = params.selection
+  const selection: CommentSelection = params.selection
     ? useSelection(params.selection)
     : useSelection({
         documentId: fileId,
@@ -59,7 +170,7 @@ export default function useComment(params) {
         selectionBounds: {},
       });
 
-  const floatingPosition = params.selection?.selectionBounds
+  const floatingPosition: Partial<SelectionBounds> = params.selection?.selectionBounds
     ? { ...params.selection.selectionBounds }
     : { top: 0, left: 0, right: 0, bottom: 0 };
 
@@ -86,23 +197,24 @@ export default function useComment(params) {
   const customAttributes = ref(params.customAttributes ?? null);
 
   const resolvedTime = ref(params.resolvedTime || null);
-  const resolvedById = ref(params.resolvedById || null);
-  const resolvedByEmail = ref(params.resolvedByEmail || null);
-  const resolvedByName = ref(params.resolvedByName || null);
+  const resolvedById = ref<string | null>(params.resolvedById || null);
+  const resolvedByEmail = ref<string | null | undefined>(params.resolvedByEmail || null);
+  const resolvedByName = ref<string | null | undefined>(params.resolvedByName || null);
   // For tracked-change threads: which decision resolved the thread
   // ('accept' | 'reject'). Null for plain comments and legacy payloads.
   const trackedChangeDecision = ref(params.trackedChangeDecision || null);
 
   /**
    * Mark this conversation as resolved with UTC date
-   *
-   * @param {String} id The actor id of the user marking this conversation as done
-   * @param {String} email The email of the user marking this conversation as done
-   * @param {String} name The name of the user marking this conversation as done
-   * @param {'accept' | 'reject'} [decision] The tracked-change decision that resolved this thread
-   * @returns {void}
    */
-  const resolveComment = ({ id, email, name, superdoc, decision, reconciliationToken }) => {
+  const resolveComment = ({
+    id,
+    email,
+    name,
+    superdoc,
+    decision,
+    reconciliationToken,
+  }: ResolveCommentParams): ReadOnlyMutationOutcome | undefined => {
     const isCanonicalReconciliation = reconciliationToken === COMMENT_RECONCILIATION_TOKEN;
     if (commentsAreReadOnly(superdoc) && !isCanonicalReconciliation) return readOnlyMutationOutcome();
     if (resolvedTime.value) return;
@@ -120,13 +232,14 @@ export default function useComment(params) {
 
   /**
    * Update the isInternal value of this comment
-   *
-   * @param {Object} param0
-   * @param {Boolean} param0.isInternal The new isInternal value
-   * @param {Object} param0.superdoc The SuperDoc instance
-   * @returns {void}
    */
-  const setIsInternal = ({ isInternal: newIsInternal, superdoc }) => {
+  const setIsInternal = ({
+    isInternal: newIsInternal,
+    superdoc,
+  }: {
+    isInternal: boolean;
+    superdoc: CommentsHost;
+  }): ReadOnlyMutationOutcome | undefined => {
     if (commentsAreReadOnly(superdoc)) return readOnlyMutationOutcome();
     const previousValue = isInternal.value;
     if (previousValue === newIsInternal) return;
@@ -144,13 +257,8 @@ export default function useComment(params) {
 
   /**
    *  Update the text value of this comment
-   *
-   * @param {Object} param0
-   * @param {String} param0.text The new text value
-   * @param {Object} param0.superdoc The SuperDoc instance
-   * @returns {void}
    */
-  const setText = ({ text, superdoc, suppressUpdate }) => {
+  const setText = ({ text, superdoc, suppressUpdate }: SetTextParams): ReadOnlyMutationOutcome | undefined => {
     if (!suppressUpdate && commentsAreReadOnly(superdoc)) return readOnlyMutationOutcome();
     commentText.value = text;
 
@@ -169,17 +277,14 @@ export default function useComment(params) {
 
   /**
    * Extract mentions from comment contents
-   *
-   * @param {String} htmlString
-   * @returns {Array[Object]} An array of unique mentions
    */
-  const extractMentions = (htmlString) => {
+  const extractMentions = (htmlString: string) => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlString, 'text/html');
 
-    const mentionElements = [...doc.querySelectorAll('span[data-type="mention"]')];
+    const mentionElements = Array.from(doc.querySelectorAll('span[data-type="mention"]'));
 
-    const uniqueMentions = [];
+    const uniqueMentions: CommentMention[] = [];
     mentionElements.forEach((span) => {
       const alreadyExists = uniqueMentions.some((m) => {
         const hasEmail = m.email === span.getAttribute('email');
@@ -200,15 +305,12 @@ export default function useComment(params) {
 
   /**
    * Update the selection bounds of this comment
-   *
-   * @param {Object} coords Object containing the selection bounds
-   * @param {*} source Specifies the source of the selection bounds
    */
-  const updatePosition = (coords, parentElement) => {
+  const updatePosition = (coords: SelectionBounds, parentElement: Pick<Element, 'getBoundingClientRect'>) => {
     selection.source = DOCUMENT_EDITOR_SELECTION_SOURCE;
     const parentTop = parentElement?.getBoundingClientRect()?.top;
 
-    const newCoords = {
+    const newCoords: SelectionBounds = {
       top: coords.top - parentTop,
       left: coords.left,
       right: coords.right,
@@ -227,17 +329,13 @@ export default function useComment(params) {
 
   /**
    * Emit updates to the end client, and sync with collaboration if necessary
-   *
-   * @param {Object} superdoc The SuperDoc instance
-   * @param {Object} event The data to emit to the client
-   * @returns {void}
    */
-  const propagateUpdate = (superdoc, event) => {
+  const propagateUpdate = (superdoc: CommentsHost, event: CommentsUpdateEvent) => {
     superdoc.emit('comments-update', event);
     syncCommentsToClients(superdoc, event);
   };
 
-  const updateIdentityValues = (updates = {}) => {
+  const updateIdentityValues = (updates: CommentIdentity = {}) => {
     if (Object.prototype.hasOwnProperty.call(updates, 'commentId')) commentId = updates.commentId;
     if (Object.prototype.hasOwnProperty.call(updates, 'importedId')) importedId = updates.importedId;
     if (Object.prototype.hasOwnProperty.call(updates, 'parentCommentId')) parentCommentId = updates.parentCommentId;
@@ -254,8 +352,6 @@ export default function useComment(params) {
 
   /**
    * Get the raw values of this comment
-   *
-   * @returns {Object} - The raw values of this comment
    */
   const getValues = () => {
     return {

@@ -33,6 +33,40 @@ describe('use-comment: extended coverage', () => {
     expect(superdoc.emit).not.toHaveBeenCalled();
   });
 
+  it.each([false, undefined, {}, { readOnly: false }])('allows mutations when modules.comments is %j', (comments) => {
+    const comment = useComment({ commentId: 'c-editable', isInternal: true, commentText: 'Original' });
+    const superdoc = { ...makeSuperdoc(), config: { modules: { comments } } };
+
+    const outcomes = [
+      comment.setIsInternal({ isInternal: false, superdoc }),
+      comment.setText({ text: 'Changed', superdoc }),
+      comment.resolveComment({ id: 'user-1', email: 'user@example.com', name: 'User', superdoc }),
+    ];
+
+    expect(outcomes).toEqual([undefined, undefined, undefined]);
+    expect(comment.isInternal).toBe(false);
+    expect(comment.commentText).toBe('Changed');
+    expect(comment.resolvedTime).not.toBeNull();
+    expect(superdoc.emit).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects direct model mutations when modules.comments is read-only', () => {
+    const comment = useComment({ commentId: 'c-module-read-only', isInternal: true, commentText: 'Original' });
+    const superdoc = { ...makeSuperdoc(), config: { modules: { comments: { readOnly: true } } } };
+
+    const outcomes = [
+      comment.resolveComment({ id: 'user-1', email: 'user@example.com', name: 'User', superdoc }),
+      comment.setIsInternal({ isInternal: false, superdoc }),
+      comment.setText({ text: 'Changed', superdoc }),
+    ];
+
+    expect(outcomes).toEqual(outcomes.map(() => ({ ok: false, reason: 'read-only-document' })));
+    expect(comment.resolvedTime).toBeNull();
+    expect(comment.isInternal).toBe(true);
+    expect(comment.commentText).toBe('Original');
+    expect(superdoc.emit).not.toHaveBeenCalled();
+  });
+
   describe('resolveComment', () => {
     it('sets resolved fields and emits a resolved event', () => {
       const c = useComment({ commentId: 'c-1', fileId: 'doc-1' });
