@@ -22,8 +22,6 @@ function naturalHeightWithGlyphBounds(
   naturalLineFamily?: string,
 ): number {
   const glyphHeight = ascent + descent;
-  // Full Chrome rounds Canvas ink bounds to whole pixels. That rounding
-  // must not add leading; retain genuinely taller or fractional ink bounds.
   const roundedBoundsFit =
     naturalLineFamily === 'times new roman' &&
     Number.isInteger(ascent) &&
@@ -88,8 +86,6 @@ export function extendFontLineMetricEnvelope(
 }
 
 export function composedNaturalLineHeight(envelope: FontLineMetricEnvelope): number {
-  // Word's Times emphasis faces share one pitch. Composing their differing
-  // Canvas ascent/descent ratios would otherwise invent extra leading.
   return naturalHeightWithGlyphBounds(
     envelope.familyNaturalLineHeight ?? envelope.naturalAscent + envelope.naturalDescent,
     envelope.glyphAscent,

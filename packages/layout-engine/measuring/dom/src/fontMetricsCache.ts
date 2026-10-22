@@ -35,7 +35,6 @@ export type FontMetricsResult = {
   descent: number;
   /** Word-compatible natural single-line height used by `w:lineRule="auto"`. */
   naturalSingleLine?: number;
-  /** Faces with one Word-native pitch despite different Canvas ink bounds. */
   naturalLineFamily?: string;
 };
 
@@ -55,8 +54,6 @@ const WORD_NATURAL_LINE_MULTIPLIER: Readonly<Record<string, number>> = Object.fr
   'calibri light': 1.219,
   cambria: 1.219,
   helvetica: 1.2,
-  // SD-5838: Word's long 12pt passages advance 18.409 CSS px across all
-  // four Times faces; their native hhea metrics give 18.398 CSS px.
   'times new roman': 1.15,
   // SD-4125 Word mutation: an 11pt Symbol list marker makes its first
   // baseline 13.44pt tall. Marker faces participate in Word's shared line

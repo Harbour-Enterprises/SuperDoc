@@ -24,8 +24,6 @@ describe('font line metric composition', () => {
   });
 
   it('keeps Word natural pitch separate from rounded Chrome glyph bounds', () => {
-    // SD-5838: native Word's long 12pt Times paragraphs advance about 18.409px;
-    // full Chrome rounds the same face's accented probe to 15px + 4px.
     const sample = { ascent: 15, descent: 4, naturalLineHeight: 18.4, naturalLineFamily: 'times new roman' };
     const envelope = extendFontLineMetricEnvelope(undefined, sample);
 

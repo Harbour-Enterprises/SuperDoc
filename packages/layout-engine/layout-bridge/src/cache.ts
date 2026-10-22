@@ -465,8 +465,6 @@ const writeTableHash = (tableBlock: TableBlock, write: HashWriter, capabilities?
           }
         }
 
-        // Deleted-row height depends on the tracked-change presentation, even
-        // when AutoFit retains the same intrinsic text in Final and Review.
         const trackedMode = paragraphBlock.attrs?.trackedChangesMode || 'review';
         const trackedEnabled = resolveTrackedChangesEnabled(paragraphBlock.attrs, true);
         append(`tcMode:${trackedMode}:tcEnabled:${trackedEnabled}`);

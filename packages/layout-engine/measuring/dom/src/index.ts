@@ -1233,8 +1233,6 @@ function calculateEmptyParagraphMetrics(
   ) {
     const ctx = getCanvasContext(fontContext);
     const runMetrics = measuredFontMetrics(ctx, fontInfo);
-    // Times paragraph marks share the populated line's Word-native pitch,
-    // including when its logical family maps to a physical substitute.
     const metrics =
       runMetrics.naturalLineFamily === 'times new roman'
         ? runMetrics
@@ -5098,8 +5096,6 @@ async function measureTableBlock(
         height: number;
       }> = [];
 
-      // AutoFit above reads the retained deleted content; Final row height must
-      // still use the empty content that the visible document had before it.
       const cellBlocks = (
         hiddenDeletedRow ? [] : (cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []))
       ) as FlowBlock[];

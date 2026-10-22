@@ -1293,7 +1293,6 @@ export type TableRowProperties = {
 };
 
 export type TableRowAttrs = {
-  /** Effective presentation for structural revisions, including nested-only rows. */
   trackedChangesMode?: TrackedChangesMode;
   trackedChangesEnabled?: boolean;
   tableRowProperties?: TableRowProperties;
