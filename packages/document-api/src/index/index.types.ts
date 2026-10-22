@@ -1,4 +1,4 @@
-import type { InlineAnchor, BlockNodeAddress } from '../types/base.js';
+import type { InlineAnchor } from '../types/base.js';
 import type { TextTarget } from '../types/address.js';
 import type { AdapterMutationFailure } from '../types/adapter-result.js';
 import type { DiscoveryOutput } from '../types/discovery.js';

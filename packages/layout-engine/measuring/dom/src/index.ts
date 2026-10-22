@@ -67,7 +67,6 @@ import {
   type TextboxContentBlock,
   type ShapeTextLayout,
   type DropCapDescriptor,
-  type CellSpacing,
   type CellBorders,
   type BorderSpec,
   type TableBorders,
@@ -174,7 +173,6 @@ import type { FixedLayoutResult } from './fixed-table-columns.js';
 import {
   type AutoFitMeasureBlock,
   buildAutoFitTableResultCacheKey,
-  buildTableCellContentMetricsCacheKey,
   clearTableAutoFitMeasurementCaches,
   getCachedAutoFitTableResult,
   type TableAutoFitContentMetricsResult,

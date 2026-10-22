@@ -14,7 +14,7 @@ import type { DiagnosticsConfig } from './diagnostics.js';
 // or behavioral changes belong in a follow-up ticket.
 
 import type { Doc as YDoc } from 'yjs';
-import type { HocuspocusProvider, HocuspocusProviderWebsocket } from '@hocuspocus/provider';
+import type { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 import type { Ref, ComputedRef } from 'vue';
 import type { ContentControlType, HyperlinkTarget } from '@superdoc/document-api';
 

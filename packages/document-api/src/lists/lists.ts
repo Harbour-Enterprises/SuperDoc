@@ -67,7 +67,6 @@ import type {
   ListsSetLevelTextInput,
   ListsSetLevelStartInput,
   ListsSetLevelLayoutInput,
-  ListsBlockTarget,
   ListsGetStateInput,
   ListsGetStateResult,
   ListsApplyInput,

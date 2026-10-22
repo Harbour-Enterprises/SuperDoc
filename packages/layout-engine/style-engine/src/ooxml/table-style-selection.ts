@@ -6,7 +6,7 @@
  * this precedence.
  */
 
-import type { StylesDocumentProperties, StyleDefinition } from './styles-types.ts';
+import type { StylesDocumentProperties } from './styles-types.ts';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Constants

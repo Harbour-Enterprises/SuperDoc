@@ -6,7 +6,6 @@ import type {
   Measure,
   Page,
   PageRefLocation,
-  ParagraphBlock,
   ParagraphMeasure,
   Run,
   TableBlock,

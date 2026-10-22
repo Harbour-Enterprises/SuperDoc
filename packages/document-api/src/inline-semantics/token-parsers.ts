@@ -10,7 +10,6 @@ import type { CoreTogglePropertyId } from './property-ids.js';
 import type { InvalidInlineTokenError, InvalidInlineTokenToggle, InvalidInlineTokenUnderline } from './error-types.js';
 import type { DirectState } from './directives.js';
 import {
-  ST_ON_OFF_VALUE_SET,
   ST_ON_OFF_ON_VALUES,
   ST_ON_OFF_OFF_VALUES,
   ST_UNDERLINE_VALUE_SET,

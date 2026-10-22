@@ -270,7 +270,6 @@ function onCollaborationProviderSynced(
 // The corresponding payload shapes for the SuperDocEventMap are
 // declared as interfaces below.
 import type {
-  AwarenessState,
   AwarenessUser,
   CanPerformPermissionParams,
   CollaborationConfig,

@@ -20,7 +20,7 @@ import {
   getFirstLineIndentOffset,
 } from '@superdoc/contracts';
 import { describeCellRenderBlocks, computeCellSliceContentHeight, getEmbeddedRowLines } from '@superdoc/layout-engine';
-import { findCharacterAtX, measureCharacterX } from './text-measurement.js';
+import { measureCharacterX } from './text-measurement.js';
 import { clickToPositionDom, findPageElement } from './dom-mapping.js';
 import {
   isListItem,
@@ -297,20 +297,10 @@ export {
 } from './position-hit.js';
 import {
   type Point,
-  type PageHit,
   type FragmentHit,
   type PositionHit,
   isAtomicFragment,
   getAtomicPmRange,
-  isRtlBlock,
-  determineColumn,
-  findLineIndexAtY,
-  mapPointToPm,
-  snapToNearestFragment,
-  hitTestPage,
-  hitTestFragment,
-  hitTestAtomicFragment,
-  hitTestTableFragment,
   findBlockIndexByFragmentId,
   calculatePageTopFallback,
   resolvePositionHitFromDomPosition,

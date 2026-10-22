@@ -11,7 +11,7 @@
 import type { BlockNodeAddress, BlockNodeType, NodeAddress } from './base.js';
 import type { SelectionTarget, TextCoordinateSpace } from './address.js';
 import type { TextSelector, NodeSelector } from './query.js';
-import type { DiscoveryItem, DiscoveryOutput, DiscoveryResult } from './discovery.js';
+import type { DiscoveryItem, DiscoveryResult } from './discovery.js';
 import type { InlineToggleDirective } from './style-policy.types.js';
 import type { StoryLocator } from './story.types.js';
 import type { StyleCatalogPreviewSources } from '../styles/catalog.js';

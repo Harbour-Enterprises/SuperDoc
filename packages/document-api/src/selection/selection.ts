@@ -11,8 +11,6 @@ import type {
   SelectionCurrentInput,
   SelectionExtractOoxmlInput,
   SelectionExtractOoxmlResult,
-  SelectionOoxmlDependency,
-  SelectionTableCellsTarget,
   SelectionInfo,
   SelectionReleaseSnapshotInput,
   SelectionReleaseSnapshotResult,

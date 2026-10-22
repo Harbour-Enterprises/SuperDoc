@@ -19,7 +19,6 @@ import { getRenderedTableBorderWidthPx } from '@superdoc/contracts';
 import { DEFAULT_FONT_MEASURE_CONTEXT, type FontMeasureContext } from '@superdoc/font-system';
 import type { AutoFitRowInput } from './autofit-columns.js';
 import type { WorkingTableCellInput, WorkingTableGridInput } from './autofit-normalize.js';
-import { DomMeasurementInfrastructureError } from './measurement-infrastructure-error.js';
 import {
   codePointAt,
   hasCjkBreakOpportunity,

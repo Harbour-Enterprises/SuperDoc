@@ -1,5 +1,4 @@
 import type { FlowBlock, SectionMetadata, SectionRefType } from '@superdoc/contracts';
-import { OOXML_PCT_DIVISOR } from '@superdoc/contracts';
 import type { HeaderFooterConstraints } from '@superdoc/layout-engine';
 
 export type HeaderFooterSectionKind = 'header' | 'footer';

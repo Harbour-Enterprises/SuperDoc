@@ -93,38 +93,24 @@ export type {
 import type {
   CreateParagraphInput,
   CreateParagraphResult,
-  DocumentDefaults,
   DocumentInfo,
-  DocumentStyles,
-  DocumentStyleInfo,
   MutationsApplyInput,
   MutationsPreviewInput,
   MutationsPreviewOutput,
   NodeAddress,
-  NodeInfo,
   PlanReceipt,
-  Query,
   QueryMatchInput,
   QueryMatchOutput,
   TextSelector,
   NodeSelector,
-  FindOutput,
   Receipt,
-  Selector,
   TextMutationReceipt,
   SDMutationReceipt,
   TrackChangeInfo,
   TrackChangesListResult,
   ExtractResult,
 } from './types/index.js';
-import type {
-  CommentInfo,
-  CommentTarget,
-  CommentsListQuery,
-  CommentsListResult,
-  CommentTrackedChangeLink,
-  TrackedChangeCommentTarget,
-} from './comments/comments.types.js';
+import type { CommentInfo, CommentsListQuery, CommentsListResult } from './comments/comments.types.js';
 import type {
   CommentsAdapter,
   CommentsCreateReceipt,
@@ -221,7 +207,7 @@ import {
 import type { InsertInput } from './insert/insert.js';
 import { executeDelete } from './delete/delete.js';
 import { executeResolveRange } from './ranges/resolve.js';
-import type { RangeResolverAdapter, ResolveRangeInput, ResolveRangeOutput } from './ranges/ranges.types.js';
+import type { ResolveRangeInput, ResolveRangeOutput } from './ranges/ranges.types.js';
 import {
   executeSelectionCurrent,
   executeSelectionExtractOoxml,
@@ -498,17 +484,10 @@ import { executeDiffCapture, executeDiffCompare, executeDiffApply } from './diff
 import type {
   DiffSnapshot,
   DiffPayload,
-  DiffPartChange,
   DiffApplyResult,
   DiffCompareInput,
   DiffApplyInput,
   DiffApplyOptions,
-  DiffApplyOperationReceipt,
-  DiffApplyReviewItem,
-  DiffApplyEligibility,
-  DiffApplyModeEligibility,
-  DiffApplyEligibilityBlocker,
-  DiffApplyEligibilityBlockerCode,
 } from './diff/diff.types.js';
 export type {
   DiffSnapshot,
@@ -545,7 +524,6 @@ import type {
   ParagraphFormatApi,
   ParagraphStylesApi,
   ParagraphsSetStyleInput,
-  ParagraphSemanticStyleRole,
   ParagraphsSetStyleRefInput,
   ParagraphsClearStyleInput,
   ParagraphsResetDirectFormattingInput,

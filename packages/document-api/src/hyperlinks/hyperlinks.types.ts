@@ -1,4 +1,4 @@
-import type { BlockNodeAddress, InlineNodeAddress, NodeAddress } from '../types/base.js';
+import type { BlockNodeAddress, InlineNodeAddress } from '../types/base.js';
 import type { TextAddress } from '../types/address.js';
 import type { DiscoveryOutput } from '../types/discovery.js';
 import type { ReceiptFailure, ReceiptSuccess } from '../types/receipt.js';

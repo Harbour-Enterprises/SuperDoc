@@ -9,7 +9,6 @@
 
 import type { ReceiptFailure } from '../types/receipt.js';
 import type { StylesChannel } from './registry.js';
-import { XML_PATH_BY_CHANNEL } from './registry.js';
 import { validateStylesApplyInput, validateStylesApplyOptions } from './validation.js';
 import type { StylesGetCatalogInput, StylesGetCatalogResult } from './catalog.js';
 import type { StylesGetThemeInput, StylesGetThemeResult } from './theme.js';

@@ -9,7 +9,6 @@ import type {
   HeaderFooterPartAddress,
   HeaderFooterSlotEntry,
   HeaderFooterResolveResult,
-  HeaderFooterPartEntry,
   HeaderFootersListQuery,
   HeaderFootersListResult,
   HeaderFootersGetInput,

@@ -8,7 +8,6 @@ import { configDefaults } from 'vite-plus'
 import { createRequire } from 'node:module';
 import { fileURLToPath, URL } from 'node:url';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
-import { visualizer } from 'rollup-plugin-visualizer';
 import vue from '@vitejs/plugin-vue'
 import layeredCssPlugin from './vite-plugin-layered-css.mjs';
 import { preserveV2WorkerAssetPlugin } from './vite-plugin-v2-worker-asset.mjs';

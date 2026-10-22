@@ -13,7 +13,7 @@
  * internals (`getEmbeddedRowLines`) that are not part of the contract surface.
  */
 
-import type { TableCellMeasure, TableCell, ParagraphMeasure, TableMeasure, TableRowMeasure } from '@superdoc/contracts';
+import type { TableCellMeasure, TableCell, ParagraphMeasure, TableMeasure } from '@superdoc/contracts';
 import { effectiveTableCellSpacing } from '@superdoc/contracts';
 import { getEmbeddedRowLines } from './layout-table.js';
 

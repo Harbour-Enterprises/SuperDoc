@@ -62,7 +62,6 @@ import {
   scheduleSectionBreak as scheduleSectionBreakExport,
   type SectionState,
   applyPendingToActive,
-  SINGLE_COLUMN_DEFAULT,
   isInitialSectionBreak,
 } from './section-breaks.js';
 import { layoutParagraphBlock, layoutParagraphBlockSteps, type FootnoteAnchorRef } from './layout-paragraph.js';
@@ -72,7 +71,7 @@ export type { FootnotePageFlow } from './footnote-page-flow.js';
 import { layoutImageBlock } from './layout-image.js';
 import { layoutDrawingBlock } from './layout-drawing.js';
 import { alignInlineZeroHeightDrawingFragments } from './inline-drawing-alignment.js';
-import { layoutTextboxContent, resolveTextboxContentMeasures } from './layout-textbox.js';
+import { resolveTextboxContentMeasures } from './layout-textbox.js';
 import {
   layoutTableBlockSteps,
   createAnchoredTableFragment,
