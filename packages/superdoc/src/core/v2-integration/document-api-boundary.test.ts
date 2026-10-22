@@ -14,7 +14,7 @@ const UPDATE = process.env.UPDATE_DOCUMENT_API_BOUNDARY === '1';
 // This is a syntactic count: a new call through an existing alias is not seen.
 const ROUTES: Record<string, RegExp> = {
   host: /(?<!\.\.)\??\.host\b|\bgetHost\s*\(/g,
-  handles: /\bgetHandles\s*(?:\?\.)?\(/g,
+  handles: /\bgetHandles\s*(?:\?\.)?\(|'getHandles'/g,
   editCommands: /\beditCommands\b/g,
   reviewBridge: /\b(?:v2Comments|v2TrackedChanges|reviewWindow)\b/g,
   firstParty: /\b(?:\w+FirstParty|firstParty[A-Z])\w*/g,
@@ -124,6 +124,11 @@ describe('Document API boundary', () => {
     });
     expect(countRoutes('<button @click="editor.commands.foo()" />')).toEqual({ v1: 1 });
     expect(countRoutes("const s = `It's ${editor.state ? 'y' : 'n'}`;")).toEqual({ v1: 1 });
+  });
+
+  it('counts a host method read by name, once per access point', () => {
+    expect(countRoutes("hostMethod(getHost(), 'getHandles')")).toEqual({ host: 1, handles: 1 });
+    expect(countRoutes("const readHandles = hostMethod(h, 'getHandles');\nreadHandles();")).toEqual({ handles: 1 });
   });
 
   it('counts optional calls and destructured v1 access', () => {

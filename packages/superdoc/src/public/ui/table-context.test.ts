@@ -216,6 +216,29 @@ describe('public table context freshness', () => {
       ui.destroy();
     }
   });
+  it('calls a prototype method on its own host and accepts a snapshot that is not an object literal', () => {
+    class HostTableContext {}
+    class ClassBasedHost {
+      #context = context('class-host');
+      getTableContext() {
+        return Object.assign(new HostTableContext(), this.#context);
+      }
+    }
+    const host = new ClassBasedHost();
+    expect(Object.getPrototypeOf(host.getTableContext())).not.toBe(Object.prototype);
+
+    const ui = createSuperDocUI({ superdoc: { activeEditor: { editorVersion: 2, host, doc: {} } } as never });
+    try {
+      expect(ui.tables.getContext()).toMatchObject({
+        status: 'ready',
+        tableNodeId: 'class-host',
+        tableSelection: context('class-host').tableSelection,
+      });
+    } finally {
+      ui.destroy();
+    }
+  });
+
   it.each([
     { selectionMode: 'cells', isRectangular: false },
     { selectionMode: 'text', isRectangular: true },

@@ -4,6 +4,7 @@ import {
   executeFirstPartyCommandAsync,
   registerFirstPartyCommandMutation,
 } from './create-super-doc-ui.js';
+import { SUPERDOC_UI_REASONS } from './reasons.js';
 
 const target = {
   kind: 'selection',
@@ -262,5 +263,49 @@ describe('whole-table host selection subscription', () => {
     expect(ui.selection.getSnapshot()).toMatchObject({ empty: true, selectionTarget: null });
     ui.destroy();
     expect(detach).toHaveBeenCalledOnce();
+  });
+});
+
+describe('restoring a captured cell selection', () => {
+  const mountRestoreHost = () => {
+    const apply = vi.fn(() => ({ ok: true }));
+    const host = { getHandles: () => ({ editing: { selectionTargets: { apply } } }) };
+    const ui = createSuperDocUI({
+      superdoc: { activeEditor: { editorVersion: 2, host, doc: {} } },
+    } as never);
+    return { ui, apply };
+  };
+
+  it('re-applies a well-formed captured cell target as a cell selection', () => {
+    const { ui, apply } = mountRestoreHost();
+    try {
+      expect(ui.selection.restore({ _tableCellSelectionTarget: target } as never)).toMatchObject({
+        ok: true,
+        success: true,
+      });
+      expect(apply).toHaveBeenCalledWith(expect.objectContaining({ kind: 'selection' }), { tableCells: true });
+    } finally {
+      ui.destroy();
+    }
+  });
+
+  it.each([
+    { label: 'a non-object point', start: 'first-cell' },
+    { label: 'a string offset', start: { kind: 'text', blockId: 'first-cell', offset: '0' } },
+    { label: 'a negative offset', start: { kind: 'text', blockId: 'first-cell', offset: -1 } },
+    { label: 'a fractional offset', start: { kind: 'text', blockId: 'first-cell', offset: 1.5 } },
+    { label: 'an empty blockId', start: { kind: 'text', blockId: '', offset: 0 } },
+  ])('rejects $label without throwing and without reaching the host', ({ start }) => {
+    const { ui, apply } = mountRestoreHost();
+    try {
+      expect(ui.selection.restore({ _tableCellSelectionTarget: { ...target, start } } as never)).toMatchObject({
+        ok: false,
+        success: false,
+        reason: SUPERDOC_UI_REASONS.targetUnresolved,
+      });
+      expect(apply).not.toHaveBeenCalled();
+    } finally {
+      ui.destroy();
+    }
   });
 });

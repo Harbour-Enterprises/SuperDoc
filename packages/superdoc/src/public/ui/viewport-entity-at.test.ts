@@ -1345,4 +1345,88 @@ describe('trackChanges.setActive — story-aware activation + all-story pre-warm
 
     ui.destroy();
   });
+
+  it('needs both read and clear on the host review handle before it touches either', () => {
+    const getActiveReviewTarget = vi.fn(() => ({ entityType: 'trackedChange', entityId: 'entity-1' }));
+    const setActiveReviewTarget = vi.fn(() => null);
+    const { superdoc } = makeHitStub(document.createElement('span'), [], undefined, {
+      getHandles: () => ({ review: { getActiveReviewTarget } }),
+    });
+    const ui = createSuperDocUI({ superdoc });
+
+    expect(ui.trackChanges.setActive(null)).toBe(true);
+    expect(getActiveReviewTarget).not.toHaveBeenCalled();
+    expect(setActiveReviewTarget).not.toHaveBeenCalled();
+
+    ui.destroy();
+  });
+});
+
+describe('contextMenu.open / contextMenu.close — host surface availability', () => {
+  const mountWithContextMenu = (contextMenu: unknown) =>
+    createSuperDocUI({ superdoc: { activeEditor: { editorVersion: 2, contextMenu, doc: {} } } as never });
+
+  it.each([
+    { label: 'a missing surface', contextMenu: undefined },
+    { label: 'a surface without open', contextMenu: {} },
+    { label: 'a non-callable open', contextMenu: { open: 'yes' } },
+  ])('reports the operation unavailable for $label', ({ contextMenu }) => {
+    const ui = mountWithContextMenu(contextMenu);
+    try {
+      expect(ui.contextMenu.open()).toEqual({ ok: false, reason: SUPERDOC_UI_REASONS.operationUnavailable });
+    } finally {
+      ui.destroy();
+    }
+  });
+
+  it('forwards a known host reason and falls back for an unknown one', () => {
+    const known = mountWithContextMenu({ open: () => ({ ok: false, reason: SUPERDOC_UI_REASONS.documentReadonly }) });
+    try {
+      expect(known.contextMenu.open()).toEqual({ ok: false, reason: SUPERDOC_UI_REASONS.documentReadonly });
+    } finally {
+      known.destroy();
+    }
+
+    const unknown = mountWithContextMenu({ open: () => ({ ok: false, reason: 'no-such-reason' }) });
+    try {
+      expect(unknown.contextMenu.open()).toEqual({ ok: false, reason: SUPERDOC_UI_REASONS.operationUnavailable });
+    } finally {
+      unknown.destroy();
+    }
+  });
+
+  it('calls open on its own surface and reports success when the host does not refuse', () => {
+    const surface = {
+      marker: 'surface',
+      open(this: { marker: string }) {
+        return { ok: true, receiver: this.marker };
+      },
+    };
+    const ui = mountWithContextMenu(surface);
+    try {
+      expect(ui.contextMenu.open()).toEqual({ ok: true });
+    } finally {
+      ui.destroy();
+    }
+  });
+
+  it('swallows a throwing close and stays silent without a surface', () => {
+    const close = vi.fn(() => {
+      throw new Error('surface gone');
+    });
+    const ui = mountWithContextMenu({ close });
+    try {
+      expect(() => ui.contextMenu.close()).not.toThrow();
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally {
+      ui.destroy();
+    }
+
+    const bare = mountWithContextMenu(undefined);
+    try {
+      expect(() => bare.contextMenu.close()).not.toThrow();
+    } finally {
+      bare.destroy();
+    }
+  });
 });
