@@ -790,8 +790,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
    * Build-time SuperDoc version string. Initialized to `'0.0.0'` so the
    * field is structurally assigned before the constructor runs, then
    * overwritten with the injected `__APP_VERSION__` constant inside
-   * `#init` (the existing `@ts-expect-error` keeps the injected global
-   * out of the JSDoc type graph). Consumers reading `superdoc.version`
+   * `#init`. Consumers reading `superdoc.version`
    * immediately after `new SuperDoc(...)` see the real version because
    * `#init` runs synchronously through the overwrite before returning.
    */
@@ -1245,7 +1244,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
     this.userColorMap = new Map();
     this.colorIndex = 0;
 
-    // @ts-expect-error - __APP_VERSION__ is injected at build time
     this.version = __APP_VERSION__;
     this.#log('🦋 [superdoc] Using SuperDoc version:', this.version);
 

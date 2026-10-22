@@ -31,6 +31,7 @@
   },
   "include": [
     "next-env.d.ts",
+    "../../packages/superdoc/src/vite-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",

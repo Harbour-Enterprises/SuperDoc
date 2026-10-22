@@ -2,7 +2,6 @@
 import './core/v2-integration/browser-peer-runtime.js';
 
 import { DOCX, PDF, HTML, getFileObject, compareVersions } from '@superdoc/common';
-// @ts-expect-error Vite resolves DOCX asset URL imports; plain tsc does not.
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 
 export { SuperDoc } from './core/SuperDoc.js';

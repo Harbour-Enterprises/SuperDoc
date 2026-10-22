@@ -19,7 +19,6 @@
 // ensure-types.cjs strips and inlines the emitted declarations so consumers
 // never resolve @superdoc/common from the packed package.
 import { DOCX, PDF, HTML, getFileObject, compareVersions } from '@superdoc/common';
-// @ts-expect-error Vite resolves DOCX asset URL imports; plain tsc does not.
 import BlankDOCXAsset from '@superdoc/common/data/blank.docx?url';
 /** URL to the blank DOCX template. */
 export const BlankDOCX: string = BlankDOCXAsset;

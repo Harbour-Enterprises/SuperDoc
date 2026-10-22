@@ -77,6 +77,8 @@ export default defineConfig({
     categories: { correctness: 'error' },
     rules: {
       'superdoc/no-local-object-guard': 'error',
+      'typescript/ban-ts-comment': ['error', { 'ts-expect-error': true, 'ts-ignore': true, 'ts-nocheck': true }],
+      'superdoc/no-ts-comment-in-js': 'error',
       // Every hit was intentional: preallocated arrays in layout hot paths,
       // sanitizers that match control characters, and `[...listeners]`
       // snapshots that keep listeners added mid-notify from running.

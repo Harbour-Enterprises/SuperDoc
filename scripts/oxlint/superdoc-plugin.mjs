@@ -97,7 +97,39 @@ const noLocalObjectGuard = {
   },
 };
 
+// typescript/ban-ts-comment skips JavaScript, where these directives still
+// silence `@ts-check` and `checkJs`. A block comment counts the way
+// TypeScript reads it: from `/*` on one line, or from the start of its last
+// line otherwise.
+const LINE_DIRECTIVE = /^\/?\s*@ts-(?:expect-error|ignore|nocheck)\b/;
+const BLOCK_DIRECTIVE = /^[/*]*\s*@ts-(?:expect-error|ignore)\b/;
+
+function tsDirective(comment) {
+  if (comment.type === 'Line') return comment.value.match(LINE_DIRECTIVE)?.[0];
+  const lines = comment.value.split(/\r\n?|[\n\u2028\u2029]/);
+  const text = lines.length === 1 ? `/*${comment.value}` : lines.at(-1).trimStart();
+  return text.match(BLOCK_DIRECTIVE)?.[0];
+}
+
+const noTsCommentInJs = {
+  meta: { type: 'problem' },
+  create(context) {
+    if (!/\.[cm]?jsx?$/.test(context.filename)) return {};
+    return {
+      Program() {
+        for (const comment of context.sourceCode.getAllComments()) {
+          const directive = tsDirective(comment);
+          if (directive) {
+            const name = directive.slice(directive.indexOf('@'));
+            context.report({ loc: comment.loc, message: `Fix the type instead of suppressing it with ${name}.` });
+          }
+        }
+      },
+    };
+  },
+};
+
 export default {
   meta: { name: 'superdoc' },
-  rules: { 'no-local-object-guard': noLocalObjectGuard },
+  rules: { 'no-local-object-guard': noLocalObjectGuard, 'no-ts-comment-in-js': noTsCommentInJs },
 };
