@@ -361,6 +361,9 @@ const writeTableHash = (tableBlock: TableBlock, write: HashWriter, capabilities?
     }
     if (row.attrs?.trackedChange) {
       append(`rtc:${trackedChangeMetaSignature(row.attrs.trackedChange)}`);
+      append(
+        `rtcMode:${row.attrs.trackedChangesMode ?? 'review'}:rtcEnabled:${row.attrs.trackedChangesEnabled !== false}`,
+      );
     }
     // Explicit row height (w:trHeight) drives row geometry. Like columnWidths
     // it lives on the block, not in a hashed border/text field, so a pure
@@ -461,6 +464,12 @@ const writeTableHash = (tableBlock: TableBlock, write: HashWriter, capabilities?
             }
           }
         }
+
+        // Deleted-row height depends on the tracked-change presentation, even
+        // when AutoFit retains the same intrinsic text in Final and Review.
+        const trackedMode = paragraphBlock.attrs?.trackedChangesMode || 'review';
+        const trackedEnabled = resolveTrackedChangesEnabled(paragraphBlock.attrs, true);
+        append(`tcMode:${trackedMode}:tcEnabled:${trackedEnabled}`);
 
         // Include paragraph-level attributes that affect layout/rendering in hash.
         // This ensures cache invalidation when paragraph formatting changes

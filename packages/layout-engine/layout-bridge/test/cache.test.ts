@@ -489,6 +489,37 @@ describe('MeasureCache', () => {
   });
 
   describe('table block caching', () => {
+    it('separates deleted-row measures across Final, review and disabled tracking', () => {
+      const withMode = (mode: 'final' | 'review', enabled: boolean) => {
+        const paragraph = paragraphBlock('deleted-notice', 'notices@adventure.example');
+        paragraph.attrs = { trackedChangesMode: mode, trackedChangesEnabled: enabled };
+        const table = tableWithCellBlocks('notice-table', [paragraph]);
+        table.rows[0].attrs = { trackedChange: { id: 'deleted-row', kind: 'delete' } };
+        return table;
+      };
+      const final = withMode('final', true);
+      cache.set(final, 624, 800, { totalHeight: 0.6667 });
+      expect(cache.get(withMode('final', true), 624, 800)).toEqual({ totalHeight: 0.6667 });
+      expect(cache.get(withMode('review', true), 624, 800)).toBeUndefined();
+      expect(cache.get(withMode('final', false), 624, 800)).toBeUndefined();
+    });
+
+    it('separates empty deleted-row measures by explicit row presentation', () => {
+      const withMode = (mode: 'final' | 'review', enabled: boolean) => {
+        const table = tableWithCellBlocks('empty-notice-table', []);
+        table.rows[0].attrs = {
+          trackedChange: { id: 'delete', kind: 'delete' },
+          trackedChangesMode: mode,
+          trackedChangesEnabled: enabled,
+        };
+        return table;
+      };
+      cache.set(withMode('final', true), 624, 800, { totalHeight: 0 });
+      expect(cache.get(withMode('final', true), 624, 800)).toEqual({ totalHeight: 0 });
+      expect(cache.get(withMode('review', true), 624, 800)).toBeUndefined();
+      expect(cache.get(withMode('final', false), 624, 800)).toBeUndefined();
+    });
+
     it('invalidates cache when an inline in-cell image is resized', () => {
       // A cell paragraph whose only run is an inline image. Resizing that image
       // changes the cell's content height and therefore an auto-height row's

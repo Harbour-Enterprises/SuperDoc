@@ -34,6 +34,7 @@
 import {
   Engines,
   getTableCellTextDirection,
+  isFinalDeletedTableRow,
   type FlowBlock,
   type ParagraphBlock,
   type ParagraphSpacing,
@@ -4980,6 +4981,7 @@ async function measureTableBlock(
     const normalizedRow = workingInput.rows[rowIndex];
     const cellMeasures: TableCellMeasure[] = [];
     let gridColIndex = 0; // Track position in the grid
+    const hiddenDeletedRow = isFinalDeletedTableRow(row);
 
     for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex++) {
       // Cached cell blocks bypass measureBlock and its execution checkpoint.
@@ -5096,7 +5098,11 @@ async function measureTableBlock(
         height: number;
       }> = [];
 
-      const cellBlocks = (cell.blocks ?? (cell.paragraph ? [cell.paragraph] : [])) as FlowBlock[];
+      // AutoFit above reads the retained deleted content; Final row height must
+      // still use the empty content that the visible document had before it.
+      const cellBlocks = (
+        hiddenDeletedRow ? [] : (cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []))
+      ) as FlowBlock[];
       const cellDirection = getTableCellTextDirection(cell.attrs);
       const verticalParagraph =
         cellBlocks.length === 1 && cellBlocks[0].kind === 'paragraph' ? cellBlocks[0] : undefined;

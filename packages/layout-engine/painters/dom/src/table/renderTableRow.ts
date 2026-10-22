@@ -1,3 +1,4 @@
+import { resolveTableRowTrackedChanges } from '@superdoc/contracts';
 import { completeRenderWork, type RenderWork } from '../render-work.js';
 import type {
   CellBorders,
@@ -479,27 +480,12 @@ export function* renderTableRowWork(deps: TableRowRenderDependencies): RenderWor
 
   const totalCols = columnWidths.length;
 
-  // Structural row-level tracked change (inserted/deleted whole row). Reuses the
-  // exact same metadata + painter helpers as inline tracked changes. The
-  // tracked-changes MODE is threaded the same way inline runs get it: from a
-  // ParagraphBlock's attrs (trackedChangesMode/trackedChangesEnabled) via
-  // resolveTrackedChangesConfig. FragmentRenderContext carries no mode field, so
-  // we resolve from a representative paragraph in this row's cells.
+  // Structural revisions carry row presentation even when cells contain only
+  // nested tables. Legacy blocks can still inherit it from their paragraphs.
   const rowTrackedChange = row?.attrs?.trackedChange;
   let rowTrackedChangeConfig: TrackedChangesRenderConfig | undefined;
   if (rowTrackedChange) {
-    let representativeParagraph: ParagraphBlock | undefined;
-    for (const cell of row?.cells ?? []) {
-      const candidate =
-        cell.paragraph ?? (cell.blocks?.find((block) => block.kind === 'paragraph') as ParagraphBlock | undefined);
-      if (candidate) {
-        representativeParagraph = candidate;
-        break;
-      }
-    }
-    rowTrackedChangeConfig = representativeParagraph
-      ? resolveTrackedChangesConfig(representativeParagraph)
-      : { mode: 'review', enabled: true };
+    rowTrackedChangeConfig = resolveTableRowTrackedChanges(row!);
   }
 
   // Effective right grid edge for THIS row's border ownership. A row with a

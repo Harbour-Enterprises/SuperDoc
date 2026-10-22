@@ -1295,6 +1295,9 @@ export type TableRowProperties = {
 };
 
 export type TableRowAttrs = {
+  /** Effective presentation for structural revisions, including nested-only rows. */
+  trackedChangesMode?: TrackedChangesMode;
+  trackedChangesEnabled?: boolean;
   tableRowProperties?: TableRowProperties;
   rowHeight?: {
     value: number;
@@ -1318,6 +1321,35 @@ export type TableRowAttrs = {
    */
   borders?: TableBorders;
 };
+
+export function resolveTableRowTrackedChanges(row: TableRow): { mode: TrackedChangesMode; enabled: boolean } {
+  const findParagraph = (blocks: readonly FlowBlock[]): ParagraphBlock | undefined => {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') return block;
+      if (block.kind === 'table') {
+        for (const nestedRow of block.rows) {
+          for (const cell of nestedRow.cells) {
+            const found = findParagraph(cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []));
+            if (found) return found;
+          }
+        }
+      }
+    }
+  };
+  const paragraph = row.cells
+    .map((cell) => findParagraph(cell.blocks ?? (cell.paragraph ? [cell.paragraph] : [])))
+    .find(Boolean);
+  return {
+    mode: row.attrs?.trackedChangesMode ?? paragraph?.attrs?.trackedChangesMode ?? 'review',
+    enabled: (row.attrs?.trackedChangesEnabled ?? paragraph?.attrs?.trackedChangesEnabled) !== false,
+  };
+}
+
+export function isFinalDeletedTableRow(row: TableRow): boolean {
+  if (row.attrs?.trackedChange?.kind !== 'delete') return false;
+  const { mode, enabled } = resolveTableRowTrackedChanges(row);
+  return mode === 'final' && enabled;
+}
 
 export type TableRow = {
   id: BlockId;

@@ -79,7 +79,7 @@ describe('bounded table measurement identity', () => {
       columnWidths: [100.1, 200.8],
     };
     const legacySerialization =
-      'outer:table:rh:21:exact|ca:cp:1:2:3:4:va:center| a\t\uD800\uDC00\uD800 :fs:12ff:Arial|nb:table:nested:table:inner:fs:12ff:Arial|ta:bc:collapse:cs:n:2|cw:100,201';
+      'outer:table:rh:21:exact|ca:cp:1:2:3:4:va:center| a\t\uD800\uDC00\uD800 :fs:12ff:Arial|tcMode:review:tcEnabled:true|nb:table:nested:table:inner:fs:12ff:Arial|tcMode:review:tcEnabled:true|ta:bc:collapse:cs:n:2|cw:100,201';
     const expected = createHash('sha256').update(Buffer.from(legacySerialization, 'utf16le')).digest('hex');
 
     expect(hashMeasureContent(block)).toBe(`table-sha256:${expected}`);
@@ -132,7 +132,7 @@ describe('bounded table measurement identity', () => {
         .flatMap((row) =>
           row.cells.map((cell) => {
             const run = (cell.blocks![0] as ParagraphBlock).runs[0] as TextRun;
-            return `${run.text}:fs:12ff:Arial`;
+            return `${run.text}:fs:12ff:Arial|tcMode:review:tcEnabled:true`;
           }),
         )
         .join('|');

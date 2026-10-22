@@ -102,6 +102,25 @@ function allocationCensus(previous: TableMeasure, current: TableMeasure) {
 }
 
 describe('retained table row geometry', () => {
+  it('collapses a deleted nested-only row while retaining its AutoFit input', async () => {
+    const runtime = createDomMeasurementRuntime();
+    const source = tableGrid(1, 1);
+    source.rows[0].attrs = {
+      trackedChange: { id: 'deletion', kind: 'delete' },
+      trackedChangesMode: 'final',
+      trackedChangesEnabled: true,
+    };
+    const nested = tableGrid(1, 1);
+    nested.id = 'nested-table';
+    const paragraph = nested.rows[0].cells[0].blocks![0] as ParagraphBlock;
+    paragraph.attrs = { trackedChangesMode: 'final', trackedChangesEnabled: true };
+    source.rows[0].cells[0].blocks = [nested];
+    const empty = { ...source, rows: [{ ...source.rows[0], cells: [{ ...source.rows[0].cells[0], blocks: [] }] }] };
+    const actual = (await measure(runtime, source)).value;
+    const control = (await measure(runtime, empty)).value;
+    expect(actual.rows[0].height).toBe(control.rows[0].height);
+  });
+
   beforeEach(() => clearTextMeasurementCaches());
   afterEach(() => configureMeasurement({ mode: 'browser' }));
 
