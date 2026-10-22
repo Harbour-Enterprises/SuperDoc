@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vite-plus/test';
 
@@ -41,6 +42,24 @@ function countRoutes(source: string): Record<string, number> {
   return counts;
 }
 
+function findIncreases(before: Counts, after: Counts): string[] {
+  return Object.entries(after).flatMap(([file, routes]) =>
+    Object.entries(routes)
+      .filter(([route, count]) => count > (before[file]?.[route] ?? 0))
+      .map(([route, count]) => `${file} ${route}: ${before[file]?.[route] ?? 0} -> ${count}`),
+  );
+}
+
+function recordLowerCounts(baselinePath: string, current: Counts): void {
+  const increases = findIncreases(JSON.parse(readFileSync(baselinePath, 'utf8')) as Counts, current);
+  if (increases.length > 0) {
+    throw new Error(
+      `The update only records removed bypasses; route new code through activeEditor.doc.\n${increases.join('\n')}`,
+    );
+  }
+  writeFileSync(baselinePath, `${JSON.stringify(current, null, 2)}\n`);
+}
+
 function* walkSourceFiles(dir: string): IterableIterator<string> {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
@@ -65,9 +84,23 @@ function inventory(): Counts {
 }
 
 describe('Document API boundary', () => {
+  it('lets an update lower counts but not raise them', () => {
+    const baselinePath = join(mkdtempSync(join(tmpdir(), 'document-api-boundary-')), 'baseline.json');
+    const recorded = `${JSON.stringify({ 'a.ts': { host: 1 } }, null, 2)}\n`;
+    writeFileSync(baselinePath, recorded);
+
+    expect(() => recordLowerCounts(baselinePath, { 'a.ts': { host: 2 }, 'b.ts': { host: 1 } })).toThrow(
+      /a\.ts host: 1 -> 2\nb\.ts host: 0 -> 1/,
+    );
+    expect(readFileSync(baselinePath, 'utf8')).toBe(recorded);
+
+    recordLowerCounts(baselinePath, {});
+    expect(JSON.parse(readFileSync(baselinePath, 'utf8'))).toEqual({});
+  });
+
   it('matches the recorded inventory of non-Document-API access', () => {
     const current = inventory();
-    if (UPDATE) writeFileSync(BASELINE_PATH, `${JSON.stringify(current, null, 2)}\n`);
+    if (UPDATE) recordLowerCounts(BASELINE_PATH, current);
     const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as Counts;
     expect(
       current,
