@@ -1387,6 +1387,57 @@ const buildTabWidthByRun = (block: ParagraphBlock, line: import('@superdoc/contr
 const TEXT_GROUP_BIDI_GUARD_RE =
   /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}\p{Bidi_Control}]/u;
 
+const separatorRunMarks = (run: TextRun): string => {
+  const { text: _text, pmStart: _start, pmEnd: _end, ...marks } = run;
+  return JSON.stringify(
+    Object.fromEntries(Object.entries({ ...marks, kind: run.kind ?? 'text' }).sort(([a], [b]) => a.localeCompare(b))),
+  );
+};
+
+const mergeLeadingWhitespaceRuns = (runs: Run[]): Run[] => {
+  const merged: Run[] = [];
+  let changed = false;
+  for (let index = runs.length - 1; index >= 0; index -= 1) {
+    const run = runs[index]!;
+    const next = merged.at(-1);
+    if (
+      isTextRun(run) &&
+      isWhitespaceOnly(run.text) &&
+      next &&
+      isTextRun(next) &&
+      !run.sdt &&
+      !next.sdt &&
+      !run.token &&
+      !next.token &&
+      !run.crossReferenceMetadata &&
+      !next.crossReferenceMetadata &&
+      !run.seqMetadata &&
+      !next.seqMetadata &&
+      !run.visualPlaceholder &&
+      !next.visualPlaceholder &&
+      !run.textEffects &&
+      !next.textEffects
+    ) {
+      const unmapped = run.pmStart == null && run.pmEnd == null && next.pmStart == null && next.pmEnd == null;
+      const contiguous =
+        run.pmStart != null &&
+        run.pmEnd != null &&
+        next.pmStart != null &&
+        next.pmEnd != null &&
+        run.pmEnd === next.pmStart &&
+        run.pmEnd - run.pmStart === run.text.length &&
+        next.pmEnd - next.pmStart === next.text.length;
+      if ((unmapped || contiguous) && separatorRunMarks(run) === separatorRunMarks(next)) {
+        merged[merged.length - 1] = { ...next, text: run.text + next.text, pmStart: run.pmStart };
+        changed = true;
+        continue;
+      }
+    }
+    merged.push(run);
+  }
+  return changed ? merged.reverse() : runs;
+};
+
 const hasUniformTextGroupBaseTypography = (
   runs: Run[],
   showTrackedParagraphMarks: boolean,
@@ -1448,6 +1499,14 @@ function* renderInlineRuns({
   isRtl: boolean;
   spacingPerSpace: number;
 }): RenderWork<void> {
+  // Room projection can join a separate authored separator to its following
+  // text. Use the same native inline shaping boundary for either source form.
+  if (
+    !isRtl &&
+    !runsForLine.some((run) => isTextRun(run) && (run.bidi?.rtl || TEXT_GROUP_BIDI_GUARD_RE.test(run.text)))
+  ) {
+    runsForLine = mergeLeadingWhitespaceRuns(runsForLine);
+  }
   const omittedAlignmentSpaces = unmeasuredAlignmentSpaces(block, line, runsForLine);
   // Use run-based rendering for normal text flow
   // Track current inline SDT wrapper to group adjacent runs with the same SDT id

@@ -1708,3 +1708,59 @@ describe('renderLine aligned wrap spaces', () => {
     expect(lineEl.querySelector<HTMLElement>('.superdoc-text-run')?.dataset.pmEnd).toBe('12');
   });
 });
+
+describe('renderLine authored separator segmentation', () => {
+  const text = (value: string, overrides: Partial<TextRun> = {}): TextRun => ({
+    kind: 'text',
+    text: value,
+    fontFamily: 'Arial',
+    fontSize: 13.333333333333332,
+    ...overrides,
+  });
+  const paint = (runs: TextRun[]) =>
+    renderLine({
+      block: { kind: 'paragraph', id: 'separator', runs },
+      line: {
+        fromRun: 0,
+        fromChar: 0,
+        toRun: runs.length - 1,
+        toChar: runs.at(-1)!.text.length,
+        width: 100,
+        ascent: 12,
+        descent: 3,
+        lineHeight: 15,
+      },
+      context: { pageNumber: 1, totalPages: 1, section: 'body' },
+      runContext: makeRunContext(),
+    });
+  it('paints a separate authored space like a coalesced leading space without mutating source runs', () => {
+    const runs = [
+      text('☑', { fontFamily: 'serif', pmStart: 1, pmEnd: 2 }),
+      text(' ', { pmStart: 2, pmEnd: 3 }),
+      text('Label', { pmStart: 3, pmEnd: 8 }),
+    ];
+    const before = structuredClone(runs);
+    const separate = paint(runs);
+    const coalesced = paint([runs[0]!, text(' Label', { pmStart: 2, pmEnd: 8 })]);
+    expect(separate.outerHTML).toBe(coalesced.outerHTML);
+    expect(runs).toEqual(before);
+  });
+  it.each([
+    { bold: true },
+    { italic: true },
+    { vertAlign: 'superscript' as const },
+    { baselineShift: 2 },
+    { comments: [{ commentId: 'space-comment' }] },
+    { dataAttrs: { 'data-source': 'space' } },
+    { trackedChange: { kind: 'insert' as const, id: 'space-revision', author: 'Author' } },
+  ])('retains a separator boundary with distinct marks %j', (marks) => {
+    const element = paint([text(' ', { pmStart: 1, pmEnd: 2, ...marks }), text('Label', { pmStart: 2, pmEnd: 7 })]);
+    const leaves = [...element.querySelectorAll('.superdoc-text-run')];
+    expect(leaves.map((leaf) => leaf.textContent)).toEqual([' ', 'Label']);
+    expect(leaves.map((leaf) => (leaf as HTMLElement).dataset.pmStart)).toEqual(['1', '2']);
+  });
+  it('retains discontinuous source positions', () => {
+    const element = paint([text(' ', { pmStart: 1, pmEnd: 2 }), text('Label', { pmStart: 3, pmEnd: 8 })]);
+    expect([...element.querySelectorAll('.superdoc-text-run')].map((leaf) => leaf.textContent)).toEqual([' ', 'Label']);
+  });
+});
