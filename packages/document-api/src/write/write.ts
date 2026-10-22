@@ -4,7 +4,8 @@ import type { ReplaceMutationOptions, ReplaceInput } from '../replace/replace.js
 import type { StoryLocator } from '../types/story.types.js';
 import { DocumentApiValidationError } from '../errors.js';
 import type { SDHtmlMarkdownCheckGuard } from '../capabilities/html-markdown-support.js';
-import { assertNoUnknownFields, isRecord } from '../validation-primitives.js';
+import { assertNoUnknownFields } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 
 export type ChangeMode = 'direct' | 'tracked';
 

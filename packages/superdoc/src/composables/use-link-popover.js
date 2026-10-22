@@ -2,6 +2,7 @@
 import { markRaw } from 'vue';
 import LinkInput from '../internal/toolbar/built-in/LinkInput.vue';
 import { scrollToElement } from '../internal/toolbar/built-in/scroll-helpers.js';
+import { isPlainObject } from '../helpers/object-guards.js';
 
 /** @typedef {import('../core/types/index.js').HyperlinkActivationContext} HyperlinkActivationContext */
 /** @typedef {import('../core/types/index.js').HyperlinkActivationResult} HyperlinkActivationResult */
@@ -167,17 +168,15 @@ const isThenable = (value) =>
  * @param {unknown} value
  * @returns {value is Record<string, unknown>}
  */
-const isObject = (value) => Boolean(value && typeof value === 'object' && !Array.isArray(value));
-
 /**
  * @param {unknown} value
  * @returns {value is HyperlinkTarget}
  */
 function isHyperlinkTarget(value) {
-  if (!isObject(value) || value.kind !== 'inline' || value.nodeType !== 'hyperlink') return false;
-  const anchor = isObject(value.anchor) ? value.anchor : null;
-  const start = anchor && isObject(anchor.start) ? anchor.start : null;
-  const end = anchor && isObject(anchor.end) ? anchor.end : null;
+  if (!isPlainObject(value) || value.kind !== 'inline' || value.nodeType !== 'hyperlink') return false;
+  const anchor = isPlainObject(value.anchor) ? value.anchor : null;
+  const start = anchor && isPlainObject(anchor.start) ? anchor.start : null;
+  const end = anchor && isPlainObject(anchor.end) ? anchor.end : null;
   return (
     typeof start?.blockId === 'string' &&
     typeof start.offset === 'number' &&
@@ -191,7 +190,7 @@ function isHyperlinkTarget(value) {
  * @returns {value is HyperlinkActivationResolution}
  */
 function isValidResolution(value) {
-  if (!isObject(value)) return false;
+  if (!isPlainObject(value)) return false;
   if (value.type === 'default' || value.type === 'suppress' || value.type === 'none') return true;
   if (value.type === 'custom') return value.component != null;
   if (value.type === 'external') return typeof value.render === 'function';
@@ -270,7 +269,7 @@ function readPaintedSourceRef(element) {
   if (!encoded) return null;
   try {
     const sourceRef = JSON.parse(encoded)?.sourceRef;
-    if (!isObject(sourceRef)) return null;
+    if (!isPlainObject(sourceRef)) return null;
     const partUri = typeof sourceRef.partUri === 'string' ? sourceRef.partUri : undefined;
     const xpathLikePath = typeof sourceRef.xpathLikePath === 'string' ? sourceRef.xpathLikePath : undefined;
     return partUri || xpathLikePath ? { partUri, xpathLikePath } : null;

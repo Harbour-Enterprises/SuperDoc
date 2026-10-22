@@ -11,7 +11,7 @@
  * comments UI without losing the rules enforced by its custom UI.
  */
 
-const isPlainObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+import { isPlainObject } from '../../helpers/object-guards.js';
 
 /** @typedef {'read' | 'write' | 'resolve'} CommentInteractionLevel */
 

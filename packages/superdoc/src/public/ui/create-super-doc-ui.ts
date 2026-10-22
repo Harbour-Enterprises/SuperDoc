@@ -115,6 +115,7 @@ import type {
 import { collectEntityHitsFromChain } from './entity-at.js';
 import { decodeLayoutStoryDataset } from '@superdoc/dom-contract';
 import { getParagraphInlineDirection } from '@superdoc/contracts';
+import { isPlainObject } from '../../helpers/object-guards.js';
 import { INLINE_PROPERTY_BY_KEY, isStoryLocator, type InlineRunPatchKey } from '@superdoc/document-api';
 
 // ---------------------------------------------------------------------------
@@ -1795,10 +1796,6 @@ function commandResultSucceeded(result: CommandExecutionResult): boolean {
   return true;
 }
 
-function isLooseObject(value: unknown): value is LooseRecord {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
 /**
  * Flatten mounted projection blocks into text-bearing blocks (those with a
  * `runs` array), descending into table rows/cells so table-cell content is
@@ -2982,7 +2979,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       if (disposed) return;
       for (const listener of [...listeners]) listener(state);
     };
-    const record = isLooseObject(receipt) ? receipt : null;
+    const record = isPlainObject(receipt) ? receipt : null;
     const readiness = getEditor()?.documentMutationReadiness as LooseRecord | undefined;
     const waitForPostPaintTask = (): Promise<void> => {
       const requestFrame = globalThis.requestAnimationFrame;
@@ -9039,10 +9036,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const payloadTarget = readLinkPayloadTarget(payload);
     const text = typeof record.text === 'string' ? record.text : undefined;
     const currentText = typeof record.currentText === 'string' ? record.currentText : undefined;
-    const requestedHyperlinkTarget = isLooseObject(record.hyperlinkTarget)
+    const requestedHyperlinkTarget = isPlainObject(record.hyperlinkTarget)
       ? (record.hyperlinkTarget as LooseRecord)
       : null;
-    const requestedTextTarget = isLooseObject(record.textTarget) ? (record.textTarget as LooseRecord) : null;
+    const requestedTextTarget = isPlainObject(record.textTarget) ? (record.textTarget as LooseRecord) : null;
     const hasRequestedHyperlinkTarget =
       typeof requestedHyperlinkTarget?.storyId === 'string' &&
       typeof requestedHyperlinkTarget?.hyperlinkNodeId === 'string';
@@ -9273,10 +9270,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       // deferral must not turn an unknown hyperlink into a plain-text wrap.
       const reads = blockIds.map((blockId) => linksApi.list({ within: paragraphTarget(blockId, story) }));
       const validReports = (reports: unknown[]) =>
-        reports.every((report) => isLooseObject(report) && Array.isArray(report.items));
+        reports.every((report) => isPlainObject(report) && Array.isArray(report.items));
       const existingFrom = (reports: unknown[]): LooseRecord | null => {
         for (const report of reports) {
-          const items = isLooseObject(report) && Array.isArray(report.items) ? (report.items as LooseRecord[]) : [];
+          const items = isPlainObject(report) && Array.isArray(report.items) ? (report.items as LooseRecord[]) : [];
           const hit = items.find((item) => hyperlinkOverlapsSelection(item, linkSelection));
           if (hit) return hit;
         }
@@ -9528,7 +9525,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   const linkPayloadHasExplicitTarget = (payload: unknown): boolean => {
     const record = readLinkPayloadRecord(payload);
     return Boolean(
-      readLinkPayloadTarget(payload) || isLooseObject(record.hyperlinkTarget) || isLooseObject(record.textTarget),
+      readLinkPayloadTarget(payload) || isPlainObject(record.hyperlinkTarget) || isPlainObject(record.textTarget),
     );
   };
 

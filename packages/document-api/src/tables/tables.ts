@@ -11,16 +11,13 @@ import type {
   TableBorderSpec,
   TableStyleOptionsPatch,
 } from '../types/table-operations.types.js';
+import { isRecord } from '../object-guards.js';
 
 // ---------------------------------------------------------------------------
 // Locator validation
 // ---------------------------------------------------------------------------
 
 type RowLocatorInput = { target?: unknown; nodeId?: unknown; rowIndex?: unknown };
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 /**
  * Validates that a table locator has exactly one of `target` or `nodeId`.
@@ -111,7 +108,7 @@ function validateRowLocator(input: RowLocatorInput, operationName: string, optio
     return;
   }
 
-  if (!isObjectRecord(input.target) || input.target.kind !== 'block') return;
+  if (!isRecord(input.target) || input.target.kind !== 'block') return;
 
   if (input.target.nodeType === 'table' && !hasRowIndex && !isAppendShorthand) {
     throw new DocumentApiValidationError(
@@ -177,7 +174,7 @@ function validateCellOrTableScopedCellLocator(input: CellOrTableScopedCellLocato
   const hasCoordinates = hasTableScopedCellCoordinates(input);
 
   // When target is a block address, check that coordinates match the node type.
-  if (isObjectRecord(input.target) && input.target.kind === 'block') {
+  if (isRecord(input.target) && input.target.kind === 'block') {
     if (input.target.nodeType === 'tableCell' && hasCoordinates) {
       throw new DocumentApiValidationError(
         'INVALID_TARGET',

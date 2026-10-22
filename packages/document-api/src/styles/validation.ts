@@ -6,7 +6,7 @@
  */
 
 import { DocumentApiValidationError } from '../errors.js';
-import { isRecord } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import type { ValueSchema, StylesChannel, StylesScope } from './registry.js';
 import { ALLOWED_KEYS_BY_CHANNEL, EXCLUDED_KEYS_BY_SCOPE, SCOPE_LABEL, getPropertyDefinition } from './registry.js';
 

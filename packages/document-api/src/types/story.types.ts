@@ -8,6 +8,7 @@
  */
 
 import type { SectionAddress } from '../sections/sections.types.js';
+import { isRecord } from '../object-guards.js';
 
 // ---------------------------------------------------------------------------
 // Story type constants
@@ -138,7 +139,7 @@ export type StoryLocator =
  * not leak through validation and fail later with raw property-access errors.
  */
 export function isStoryLocator(value: unknown): value is StoryLocator {
-  if (!isObjectRecord(value) || value.kind !== 'story' || !isStringEnumMember(value.storyType, STORY_TYPES)) {
+  if (!isRecord(value) || value.kind !== 'story' || !isStringEnumMember(value.storyType, STORY_TYPES)) {
     return false;
   }
 
@@ -237,10 +238,6 @@ export function storyLocatorToKey(locator: StoryLocator): string {
   }
 }
 
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
@@ -258,9 +255,6 @@ function isOptionalStringEnumMember<const T extends readonly string[]>(
 
 function isSectionAddress(value: unknown): value is SectionAddress {
   return (
-    isObjectRecord(value) &&
-    value.kind === 'section' &&
-    typeof value.sectionId === 'string' &&
-    value.sectionId.length > 0
+    isRecord(value) && value.kind === 'section' && typeof value.sectionId === 'string' && value.sectionId.length > 0
   );
 }

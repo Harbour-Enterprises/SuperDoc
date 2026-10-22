@@ -14,6 +14,7 @@ import type {
   DiffApplyInput,
   DiffApplyOptions,
 } from './diff.types.js';
+import { isRecord } from '../object-guards.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -46,10 +47,6 @@ export interface DiffApi {
 // ---------------------------------------------------------------------------
 // Validation helpers
 // ---------------------------------------------------------------------------
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 function validateSnapshotWrapper(snapshot: unknown): asserts snapshot is DiffSnapshot {
   if (!isRecord(snapshot)) {

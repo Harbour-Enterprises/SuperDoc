@@ -8,7 +8,8 @@
 
 import type { ResolveRangeInput, ResolveRangeOutput, RangeResolverAdapter, RangeAnchor } from './ranges.types.js';
 import { DocumentApiValidationError } from '../errors.js';
-import { isRecord, assertNoUnknownFields } from '../validation-primitives.js';
+import { assertNoUnknownFields } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import { isSelectionPoint } from '../validation/selection-target-validator.js';
 import { validateStoryLocator } from '../validation/story-validator.js';
 

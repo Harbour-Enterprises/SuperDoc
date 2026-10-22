@@ -25,12 +25,8 @@ import type { SelectionMutationAdapter } from '../selection-mutation.js';
 import type { WriteAdapter } from '../write/write.js';
 import { normalizeMutationOptions, normalizeTextMutationOptions } from '../write/write.js';
 import { DocumentApiValidationError } from '../errors.js';
-import {
-  isRecord,
-  isBlockNodeAddress,
-  assertNoUnknownFields,
-  validateNestingPolicyValue,
-} from '../validation-primitives.js';
+import { isBlockNodeAddress, assertNoUnknownFields, validateNestingPolicyValue } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import { isSelectionTarget } from '../validation/selection-target-validator.js';
 import { validateDocumentFragment } from '../validation/fragment-validator.js';
 import { validateStoryLocator } from '../validation/story-validator.js';

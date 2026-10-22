@@ -14,8 +14,7 @@
  */
 
 import { mergeDefined } from './merge-defined.js';
-
-const isPlainObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+import { isPlainObject } from '../../helpers/object-guards.js';
 
 /**
  * Resolve the generic surface infrastructure config.

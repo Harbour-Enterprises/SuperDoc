@@ -73,7 +73,9 @@ export default defineConfig({
   // or hold test code. Unlike Oxfmt above, which reads .gitignore, `vp lint`
   // only honors this list, so dist output must be repeated here.
   lint: {
+    jsPlugins: [{ name: 'superdoc', specifier: './scripts/oxlint/superdoc-plugin.mjs' }],
     rules: {
+      'superdoc/no-local-object-guard': 'error',
       'no-unused-vars': 'error',
       'no-unused-private-class-members': 'error',
       // Every hit was intentional: preallocated arrays in layout hot paths,

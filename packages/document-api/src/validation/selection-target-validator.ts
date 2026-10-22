@@ -7,7 +7,8 @@
 
 import type { SelectionTarget, SelectionPoint, SelectionEdgeNodeAddress } from '../types/address.js';
 import { SELECTION_EDGE_NODE_TYPES } from '../types/address.js';
-import { isRecord, isInteger } from '../validation-primitives.js';
+import { isInteger } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 
 const VALID_EDGE_VALUES: ReadonlySet<string> = new Set(['before', 'after']);
 const VALID_EDGE_NODE_TYPES: ReadonlySet<string> = new Set(SELECTION_EDGE_NODE_TYPES);

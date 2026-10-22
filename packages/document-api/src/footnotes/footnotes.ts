@@ -1,7 +1,8 @@
 import type { MutationOptions } from '../write/write.js';
 import { normalizeMutationOptions } from '../write/write.js';
 import { DocumentApiValidationError } from '../errors.js';
-import { assertNoUnknownFields, assertTargetPresent, isRecord } from '../validation-primitives.js';
+import { assertNoUnknownFields, assertTargetPresent } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import { validateDocumentFragment } from '../validation/fragment-validator.js';
 import type {
   FootnoteAddress,

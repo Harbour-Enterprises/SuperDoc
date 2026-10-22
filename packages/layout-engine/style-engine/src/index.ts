@@ -20,6 +20,7 @@ import type {
   DocPartMetadata,
   SdtMetadata,
 } from '@superdoc/contracts';
+import { isPlainObject } from '@superdoc/contracts';
 
 export type {
   FieldAnnotationMetadata,
@@ -303,10 +304,6 @@ function normalizeDocPartMetadata(attrs: Record<string, unknown>): DocPartMetada
     alias: toOptionalString(attrs.alias) ?? null,
     instruction: toOptionalString(attrs.instruction) ?? null,
   };
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 function toOptionalString(value: unknown): string | undefined {

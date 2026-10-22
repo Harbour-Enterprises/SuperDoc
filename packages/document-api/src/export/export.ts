@@ -14,6 +14,7 @@ import {
   type ExportToDocxResult,
   type SDExportMode,
 } from './export.types.js';
+import { isRecord } from '../object-guards.js';
 
 // ---------------------------------------------------------------------------
 // Adapter interface: implemented by each engine
@@ -34,10 +35,6 @@ export interface ExportApi {
 // ---------------------------------------------------------------------------
 // Validation helpers
 // ---------------------------------------------------------------------------
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 function resolveMode(input: ExportToDocxInput | undefined): SDExportMode {
   if (input != null && !isRecord(input)) {

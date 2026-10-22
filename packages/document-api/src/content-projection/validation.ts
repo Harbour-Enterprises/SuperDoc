@@ -2,7 +2,8 @@ import { DocumentApiValidationError } from '../errors.js';
 import type { SDProjectionReadInput } from '../types/content-projection.js';
 import { SD_PROJECTION_REVIEW_MODES } from '../types/content-projection.js';
 import { isStoryLocator } from '../types/story.types.js';
-import { assertNoUnknownFields, isBlockNodeAddress, isRecord } from '../validation-primitives.js';
+import { assertNoUnknownFields, isBlockNodeAddress } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import { isSelectionTarget } from '../validation/selection-target-validator.js';
 
 const REVIEW_MODES = new Set<string>(SD_PROJECTION_REVIEW_MODES);

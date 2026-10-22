@@ -1,6 +1,6 @@
 import { DocumentApiValidationError } from '../errors.js';
 import { normalizeMutationOptions, type MutationOptions } from '../write/write.js';
-import { isRecord } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import type { SectionAddress, SectionMutationResult } from '../sections/sections.types.js';
 import type {
   HeaderFooterKind,

@@ -20,7 +20,8 @@ import { DocumentApiValidationError } from '../errors.js';
 import { validateInsertInput } from '../insert/insert.js';
 import { validateReplaceInput } from '../replace/replace.js';
 import { validateOptionalBoolean, validateProjectionReadInput } from '../content-projection/validation.js';
-import { assertNoUnknownFields, isRecord } from '../validation-primitives.js';
+import { assertNoUnknownFields } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import { validateChangeMode } from '../write/write.js';
 
 export interface SDHtmlMarkdownCheckGuard {

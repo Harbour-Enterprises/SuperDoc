@@ -7,7 +7,8 @@
 
 import type { MutationOptions } from '../write/write.js';
 import { DocumentApiValidationError } from '../errors.js';
-import { isRecord, isInteger } from '../validation-primitives.js';
+import { isInteger } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import { validateDocumentFragment } from '../validation/fragment-validator.js';
 import { isSelectionTarget } from '../validation/selection-target-validator.js';
 import { validateStoryLocator } from '../validation/story-validator.js';

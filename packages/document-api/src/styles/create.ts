@@ -51,7 +51,8 @@
  */
 
 import { DocumentApiValidationError } from '../errors.js';
-import { assertNoUnknownFields, isRecord } from '../validation-primitives.js';
+import { assertNoUnknownFields } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import type { ReceiptFailure } from '../types/receipt.js';
 import type { SDHighlightColor } from '../types/sd-props.js';
 import type { StylesParagraphPatch, StylesRunPatch, StylesStateMap } from './apply.js';

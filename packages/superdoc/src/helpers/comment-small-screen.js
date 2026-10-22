@@ -1,3 +1,5 @@
+import { isPlainObject } from './object-guards.js';
+
 export const COMPACT_ANCHOR_SELECTOR = '[data-track-change-id], .superdoc-comment-highlight, .sd-comment-anchor';
 
 export const DEFAULT_COMMENTS_SIDEBAR_LANE_PX = 320;
@@ -6,8 +8,6 @@ export const DEFAULT_DOCUMENT_VISIBLE_MIN_WIDTH_PX = 816;
 export const RIGHT_CLICK_COMMENT_SUPPRESS_MS = 250;
 export const DEFAULT_COMMENTS_LAYOUT = 'sidebar';
 export const VALID_COMMENTS_LAYOUTS = new Set(['auto', 'sidebar', 'inline']);
-
-const isPlainObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const firstDefined = (...values) => values.find((value) => value !== undefined);
 

@@ -20,7 +20,7 @@
 
 import { DocumentApiValidationError } from '../errors.js';
 import type { SDThemeColorName, SDThemeFontRef } from '../types/sd-props.js';
-import { isRecord } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 
 // ---------------------------------------------------------------------------
 // Enumerations

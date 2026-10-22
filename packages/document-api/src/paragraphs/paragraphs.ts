@@ -7,7 +7,8 @@
 
 import { normalizeMutationOptions, type MutationOptions } from '../write/write.js';
 import { DocumentApiValidationError } from '../errors.js';
-import { isRecord, assertNoUnknownFields } from '../validation-primitives.js';
+import { assertNoUnknownFields } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import { validateStoryLocator } from '../validation/story-validator.js';
 import type {
   ParagraphTarget,

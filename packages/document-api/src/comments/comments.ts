@@ -11,7 +11,8 @@ import type {
 } from './comments.types.js';
 import type { RevisionGuardOptions } from '../write/write.js';
 import { DocumentApiValidationError } from '../errors.js';
-import { isRecord, isTextAddress, isTextTarget, assertNoUnknownFields } from '../validation-primitives.js';
+import { isTextAddress, isTextTarget, assertNoUnknownFields } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import { validateStoryLocator } from '../validation/story-validator.js';
 import { isSelectionTarget } from '../validation/selection-target-validator.js';
 import { normalizeCommentCreateAttribution } from './comment-create-attribution.js';

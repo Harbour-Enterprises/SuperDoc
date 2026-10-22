@@ -1,7 +1,7 @@
 import type { StoryLocator } from '../types/story.types.js';
 import { validateStoryLocator } from '../validation/story-validator.js';
 import { DocumentApiValidationError } from '../errors.js';
-import { isRecord } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 
 export interface GetTextInput {
   /** Restrict the read to a specific story. Omit for body (backward compatible). */

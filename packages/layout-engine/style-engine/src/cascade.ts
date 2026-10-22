@@ -10,6 +10,7 @@
  * - layout-engine's style resolution (for rendering)
  */
 
+import { isPlainObject } from '@superdoc/contracts';
 import { ParagraphProperties, RunFontFamilyProperties, RunProperties } from './ooxml/types';
 import type { TableCellProperties, TableProperties } from './ooxml/styles-types';
 
@@ -55,7 +56,7 @@ export function combineProperties<T extends PropertyObject>(
   const merge = (target: Record<string, unknown>, source: Record<string, unknown>): PropertyObject => {
     const output: Record<string, unknown> = { ...target };
 
-    if (isObject(target) && isObject(source)) {
+    if (isPlainObject(target) && isPlainObject(source)) {
       for (const key in source) {
         if (Object.prototype.hasOwnProperty.call(source, key)) {
           const handler = specialHandling[key];
@@ -63,9 +64,9 @@ export function combineProperties<T extends PropertyObject>(
           if (handler && typeof handler === 'function') {
             // Use custom handler for this key
             output[key] = handler(output, source);
-          } else if (!fullOverrideProps.includes(key) && isObject(source[key])) {
+          } else if (!fullOverrideProps.includes(key) && isPlainObject(source[key])) {
             // Deep merge nested objects (unless marked for full override)
-            if (key in target && isObject(target[key])) {
+            if (key in target && isPlainObject(target[key])) {
               output[key] = merge(target[key] as Record<string, unknown>, source[key] as Record<string, unknown>);
             } else {
               output[key] = source[key];
@@ -82,15 +83,6 @@ export function combineProperties<T extends PropertyObject>(
   };
 
   return propertiesArray.reduce((acc, current) => merge(acc, (current ?? {}) as Record<string, unknown>), {}) as T;
-}
-
-/**
- * Determines whether the supplied value is a mergeable plain object.
- * @param item - Value to inspect.
- * @returns True when the value is a non-array object.
- */
-function isObject(item: unknown): item is PropertyObject {
-  return item != null && typeof item === 'object' && !Array.isArray(item);
 }
 
 // ---------------------------------------------------------------------------

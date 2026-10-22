@@ -23,7 +23,8 @@ import type {
   ContentControlMutationResult,
 } from '../content-controls/content-controls.types.js';
 import { DocumentApiValidationError } from '../errors.js';
-import { isRecord, isInteger } from '../validation-primitives.js';
+import { isInteger } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import { validateStoryLocator } from '../validation/story-validator.js';
 
 const VALID_HEADING_LEVELS: ReadonlySet<number> = new Set([1, 2, 3, 4, 5, 6]);

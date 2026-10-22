@@ -20,7 +20,7 @@
 import type { SDFragment } from '../types/fragment.js';
 import { SD_CONTENT_NODE_KINDS, SD_INLINE_NODE_KINDS } from '../types/fragment.js';
 import { DocumentApiValidationError } from '../errors.js';
-import { isRecord } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 
 // ---------------------------------------------------------------------------
 // Kind sets

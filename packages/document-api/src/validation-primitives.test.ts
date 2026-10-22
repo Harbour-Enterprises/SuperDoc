@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { isRecord, isInteger, isTextAddress, isTextTarget, assertNoUnknownFields } from './validation-primitives.js';
+import { isInteger, isTextAddress, isTextTarget, assertNoUnknownFields } from './validation-primitives.js';
+import { isRecord } from './object-guards.js';
 import { DocumentApiValidationError } from './errors.js';
 
 describe('isRecord', () => {

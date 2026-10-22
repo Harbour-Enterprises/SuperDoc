@@ -10,7 +10,7 @@
 
 import { DocumentApiValidationError } from '../errors.js';
 import type { SDTheme } from '../types/sd-styles.js';
-import { isRecord } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import type { StyleCatalogDiagnostic, StyleSourcePartStatus } from './catalog.js';
 
 /** `styles.getTheme` takes no options. */

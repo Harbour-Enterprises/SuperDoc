@@ -1,5 +1,5 @@
 import { DocumentApiValidationError } from '../errors.js';
-import { isRecord } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 
 export type InlinePropertyStorage = 'mark' | 'runAttribute';
 export type InlinePropertyType = 'boolean' | 'string' | 'number' | 'object' | 'array';

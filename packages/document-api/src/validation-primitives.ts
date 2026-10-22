@@ -13,6 +13,7 @@ import { BLOCK_NODE_TYPES } from './types/base.js';
 import { isStoryLocator } from './types/story.types.js';
 import { TABLE_NESTING_POLICY_VALUES } from './types/placement.js';
 import { DocumentApiValidationError } from './errors.js';
+import { isRecord } from './object-guards.js';
 
 /**
  * Throws INVALID_TARGET if target is null or undefined.
@@ -22,10 +23,6 @@ export function assertTargetPresent(target: unknown, operationName: string): voi
   if (target === undefined || target === null) {
     throw new DocumentApiValidationError('INVALID_TARGET', `${operationName} requires a target.`);
   }
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value != null && !Array.isArray(value);
 }
 
 export function isInteger(value: unknown): value is number {

@@ -15,6 +15,8 @@
 // routes stay absent and the binder fails closed with a stable diagnostic rather
 // than fabricating behavior.
 
+import { isPlainObject } from '../../../helpers/object-guards.js';
+
 /**
  * The narrow slice of the public Document API facade (`activeEditor.doc`) the
  * reference shortcuts route through. Every method is optional so capability is
@@ -107,17 +109,13 @@ function isPromiseLike(value: unknown): value is Promise<unknown> {
   return Boolean(value && typeof value === 'object' && typeof (value as { then?: unknown }).then === 'function');
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
 function isTextTarget(value: unknown): value is { kind: 'text'; segments: unknown[]; story?: unknown } {
-  return isRecord(value) && value.kind === 'text' && Array.isArray(value.segments) && value.segments.length > 0;
+  return isPlainObject(value) && value.kind === 'text' && Array.isArray(value.segments) && value.segments.length > 0;
 }
 
 function isHeaderFooterStory(story: unknown): boolean {
   return (
-    isRecord(story) &&
+    isPlainObject(story) &&
     story.kind === 'story' &&
     (story.storyType === 'headerFooterSlot' || story.storyType === 'headerFooterPart')
   );
@@ -134,7 +132,7 @@ function resolveCurrentHeaderFooterTextTarget(doc: ReferenceDocumentApi): Sessio
     return { handled: false, reason: 'page-field-selection-unavailable' };
   }
   if (isPromiseLike(currentSelection)) return { handled: false, reason: 'page-field-selection-async' };
-  if (!isRecord(currentSelection) || !isTextTarget(currentSelection.target)) {
+  if (!isPlainObject(currentSelection) || !isTextTarget(currentSelection.target)) {
     return { handled: false, reason: 'page-field-selection-unavailable' };
   }
   if (!isHeaderFooterStory(currentSelection.target.story)) {
@@ -228,7 +226,7 @@ export function createV2SessionShortcutRoutes(deps: CreateV2SessionShortcutRoute
       });
       if (isPromiseLike(result)) {
         void result.catch(() => {});
-      } else if (isRecord(result) && result.success === false) {
+      } else if (isPlainObject(result) && result.success === false) {
         return { handled: false, reason: 'page-field-insert-failed' };
       }
     } catch {

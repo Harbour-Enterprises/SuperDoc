@@ -31,6 +31,7 @@
 import { firstDefined, mergeDefined } from './merge-defined.js';
 import { normalizeCommentsUiConfig } from '../../helpers/comment-small-screen.js';
 import { TOOLBAR_ITEM_ALIASES } from '../../internal/toolbar/toolbar-item-aliases.js';
+import { isPlainObject } from '../../helpers/object-guards.js';
 
 /** Surfaces that render when the consumer says nothing at all. */
 const HISTORICAL_DEFAULTS = Object.freeze({
@@ -66,8 +67,6 @@ const CUSTOM_TOOLBAR_ITEM_WIDTHS = Object.freeze({ compact: 32, default: 80, wid
 
 /** Every built-in surface `ui: false` turns off. */
 const BUILT_IN_SURFACES = Object.freeze(Object.keys(HISTORICAL_DEFAULTS));
-
-const isPlainObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Read a surface's enabled state from a `ui` block.

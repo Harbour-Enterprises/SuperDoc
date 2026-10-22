@@ -12,7 +12,8 @@ import type { StoryLocator } from '../types/story.types.js';
 import type { SelectionMutationAdapter } from '../selection-mutation.js';
 import { normalizeTextMutationOptions } from '../write/write.js';
 import { DocumentApiValidationError } from '../errors.js';
-import { isRecord, assertNoUnknownFields } from '../validation-primitives.js';
+import { assertNoUnknownFields } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import { isSelectionTarget } from '../validation/selection-target-validator.js';
 import { validateStoryLocator } from '../validation/story-validator.js';
 

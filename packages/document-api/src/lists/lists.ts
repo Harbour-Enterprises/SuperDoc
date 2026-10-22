@@ -1,7 +1,8 @@
 import type { MutationOptions } from '../write/write.js';
 import { normalizeMutationOptions } from '../write/write.js';
 import { DocumentApiValidationError } from '../errors.js';
-import { isRecord, isInteger } from '../validation-primitives.js';
+import { isInteger } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import { BLOCK_NODE_TYPES } from '../types/base.js';
 import {
   LIST_KINDS,

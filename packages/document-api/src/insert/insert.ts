@@ -16,12 +16,8 @@ import { type BlockNodeAddress } from '../types/base.js';
 import { PLACEMENT_VALUES, type Placement } from '../types/placement.js';
 import { DocumentApiValidationError } from '../errors.js';
 import { assertOperationCanStart, type OperationCancellation } from '../write/operation-cancellation.js';
-import {
-  isRecord,
-  isBlockNodeAddress,
-  assertNoUnknownFields,
-  validateNestingPolicyValue,
-} from '../validation-primitives.js';
+import { isBlockNodeAddress, assertNoUnknownFields, validateNestingPolicyValue } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 import { isSelectionTarget } from '../validation/selection-target-validator.js';
 import { validateDocumentFragment } from '../validation/fragment-validator.js';
 import { validateStoryLocator } from '../validation/story-validator.js';

@@ -40,7 +40,7 @@
  */
 
 import { DocumentApiValidationError } from '../errors.js';
-import { isRecord } from '../validation-primitives.js';
+import { isRecord } from '../object-guards.js';
 
 export type TemplatesApplySourcePath = { kind: 'path'; path: string };
 export type TemplatesApplySourceBase64 = { kind: 'base64'; data: string; filename?: string };

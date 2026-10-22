@@ -4,7 +4,7 @@
  * existing link-popover spellings.
  */
 
-const isPlainObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+import { isPlainObject } from '../../helpers/object-guards.js';
 
 /**
  * Resolve hyperlink activation behavior.
