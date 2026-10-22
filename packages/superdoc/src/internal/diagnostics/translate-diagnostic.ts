@@ -14,28 +14,29 @@
  * failures) and must not treat `null` as an error.
  */
 
-/** @typedef {'PARSE_ERROR'|'RENDER_ERROR'|'UNSUPPORTED_FEATURE'|'PERFORMANCE_ERROR'} SuperDocDiagnosticCode */
-/** @typedef {'unzip'|'parse'|'layout'|'render'|'export'} SuperDocDiagnosticStage */
+import type {
+  Editor,
+  SuperDocDiagnosticCode,
+  SuperDocDiagnosticStage,
+  SuperDocExceptionDiagnosticPayload,
+} from '../../core/types/index.js';
 
-/** @typedef {import('../../core/types/index.js').Editor} Editor */
+type DiagnosticTranslationContext = {
+  documentId?: string | null;
+  editor?: Editor | null;
+};
 
-/**
- * @typedef {object} SuperDocExceptionDiagnosticPayload
- * @property {unknown} error
- * @property {SuperDocDiagnosticCode} diagnosticCode
- * @property {SuperDocDiagnosticStage} diagnosticStage
- * @property {'warn'|'error'} severity
- * @property {string} internalCode
- * @property {string|null} [documentId]
- * @property {Editor|null} [editor]
- * @property {string} message
- */
+type DiagnosticRecord = {
+  code?: string;
+  severity?: string;
+  message?: string;
+};
 
-/**
- * @typedef {object} DiagnosticTranslationContext
- * @property {string|null} [documentId]
- * @property {Editor|null} [editor]
- */
+type RenderReadinessDiagnostic = {
+  code?: string;
+  reason?: string;
+  severity?: string;
+};
 
 // Package-open codes that are size/count/depth caps, not content-integrity
 // failures — see superdoc/v2/editor-core/src/opc/package-open.ts.
@@ -57,12 +58,11 @@ const UNZIP_INTERNAL_ONLY_CODES = new Set([
 /**
  * Translates a `SDDiagnosticRecord`-shaped object (package-open / unzip
  * stage) into a public diagnostic payload, or `null` if out of scope.
- *
- * @param {{code?: string, severity?: string, message?: string}} record
- * @param {DiagnosticTranslationContext} [ctx]
- * @returns {SuperDocExceptionDiagnosticPayload | null}
  */
-export function translateUnzipDiagnostic(record, ctx = {}) {
+export function translateUnzipDiagnostic(
+  record: DiagnosticRecord | null | undefined,
+  ctx: DiagnosticTranslationContext = {},
+): SuperDocExceptionDiagnosticPayload | null {
   if (!record || typeof record.code !== 'string') return null;
   const { code, severity, message } = record;
 
@@ -88,12 +88,11 @@ export function translateUnzipDiagnostic(record, ctx = {}) {
 /**
  * Translates a `V2RenderReadinessDiagnostic`-shaped object (render stage)
  * into a public diagnostic payload, or `null` if out of scope.
- *
- * @param {{code?: string, reason?: string, severity?: string}} diag
- * @param {DiagnosticTranslationContext} [ctx]
- * @returns {SuperDocExceptionDiagnosticPayload | null}
  */
-export function translateRenderReadinessDiagnostic(diag, ctx = {}) {
+export function translateRenderReadinessDiagnostic(
+  diag: RenderReadinessDiagnostic | null | undefined,
+  ctx: DiagnosticTranslationContext = {},
+): SuperDocExceptionDiagnosticPayload | null {
   if (!diag || typeof diag.code !== 'string') return null;
   const { code, reason, severity } = diag;
   if (severity !== 'error' && severity !== 'warn') return null;
@@ -114,7 +113,7 @@ export function translateRenderReadinessDiagnostic(diag, ctx = {}) {
 
   const unusableFurniture =
     code === 'render.header-footer.ref-unusable' || code === 'render.header-footer.part-unusable';
-  let diagnosticCode;
+  let diagnosticCode: SuperDocDiagnosticCode;
   if (unusableFurniture) {
     diagnosticCode = 'PARSE_ERROR';
   } else if (
@@ -169,7 +168,7 @@ export function translateRenderReadinessDiagnostic(diag, ctx = {}) {
 // Render `Error` subclasses that reach `boot()` catch sites without a
 // `.code` field (see superdoc/v2/v2-host/src/render-surface.ts). Matched by
 // `.name`, which the shell forwards as `bootErrorName`.
-const BOOT_ERROR_NAME_TO_DIAGNOSTIC = {
+const BOOT_ERROR_NAME_TO_DIAGNOSTIC: Partial<Record<string, SuperDocDiagnosticCode>> = {
   OpenRenderNoProgressError: 'PERFORMANCE_ERROR',
   BoundedLocalPageCapError: 'PERFORMANCE_ERROR',
   MountedEnginePassInterrupt: 'RENDER_ERROR',
@@ -226,7 +225,9 @@ const BOOT_REASON_ALLOW_LIST = new Set(['open-failed', 'source-load-failed']);
 // `'error'` here too, matching `open-failed`/`source-load-failed`; a
 // consumer filtering on `severity` to tell "didn't open" apart from "opened
 // with a caveat" must still see `'error'`.
-const BOOT_REASON_PERFORMANCE_MAP = new Map([['input-too-large-for-inline-review', 'unzip']]);
+const BOOT_REASON_PERFORMANCE_MAP = new Map<string, SuperDocDiagnosticStage>([
+  ['input-too-large-for-inline-review', 'unzip'],
+]);
 
 /**
  * Translates a boot/open failure into a public diagnostic payload, or
@@ -236,20 +237,20 @@ const BOOT_REASON_PERFORMANCE_MAP = new Map([['input-too-large-for-inline-review
  * `boot()` catch sites in `V2SuperEditor.vue` hardcode `reason: 'open-failed'`
  * regardless of which error was actually thrown, so `reason` alone is not a
  * reliable signal once a real caught-error name is available.
- *
- * @param {string} reason
- * @param {string|null} [detail]
- * @param {DiagnosticTranslationContext & {bootErrorName?: string}} [ctx]
- * @returns {SuperDocExceptionDiagnosticPayload | null}
  */
-export function translateBootFailureReason(reason, detail, ctx = {}) {
+export function translateBootFailureReason(
+  reason: string,
+  detail?: string | null,
+  ctx: DiagnosticTranslationContext & { bootErrorName?: string } = {},
+): SuperDocExceptionDiagnosticPayload | null {
   const { bootErrorName, documentId, editor } = ctx;
 
-  if (bootErrorName && BOOT_ERROR_NAME_TO_DIAGNOSTIC[bootErrorName]) {
+  const bootDiagnosticCode = bootErrorName ? BOOT_ERROR_NAME_TO_DIAGNOSTIC[bootErrorName] : undefined;
+  if (bootErrorName && bootDiagnosticCode) {
     const message = detail || bootErrorName;
     return {
       error: new Error(message),
-      diagnosticCode: BOOT_ERROR_NAME_TO_DIAGNOSTIC[bootErrorName],
+      diagnosticCode: bootDiagnosticCode,
       diagnosticStage: 'render',
       severity: 'error',
       internalCode: bootErrorName,
@@ -259,12 +260,13 @@ export function translateBootFailureReason(reason, detail, ctx = {}) {
     };
   }
 
-  if (BOOT_REASON_PERFORMANCE_MAP.has(reason)) {
+  const performanceStage = BOOT_REASON_PERFORMANCE_MAP.get(reason);
+  if (performanceStage) {
     const message = detail || reason;
     return {
       error: new Error(message),
       diagnosticCode: 'PERFORMANCE_ERROR',
-      diagnosticStage: BOOT_REASON_PERFORMANCE_MAP.get(reason),
+      diagnosticStage: performanceStage,
       severity: 'error',
       internalCode: reason,
       documentId: documentId ?? null,
@@ -316,12 +318,11 @@ const SSIG_PARSE_ERROR_CODES = new Set([
  * no vetted warn case among the 5 codes represents a real parse failure, so
  * unlike the unzip translator's `main-document-fallback` there is nothing to
  * allow-list here.
- *
- * @param {{code?: string, severity?: string, message?: string}} record
- * @param {DiagnosticTranslationContext} [ctx]
- * @returns {SuperDocExceptionDiagnosticPayload | null}
  */
-export function translateSsigParseDiagnostic(record, ctx = {}) {
+export function translateSsigParseDiagnostic(
+  record: DiagnosticRecord | null | undefined,
+  ctx: DiagnosticTranslationContext = {},
+): SuperDocExceptionDiagnosticPayload | null {
   if (!record || typeof record.code !== 'string') return null;
   const { code, severity, message } = record;
   if (!SSIG_PARSE_ERROR_CODES.has(code)) return null;
@@ -345,16 +346,14 @@ export function translateSsigParseDiagnostic(record, ctx = {}) {
  * diagnostic payload. Always returns a payload; export failures always
  * classify as `RENDER_ERROR`/`'export'` -- a serialization failure of an
  * already-open document, not a document-corruption or capacity issue.
- *
- * @param {unknown} error
- * @param {DiagnosticTranslationContext} [ctx]
- * @returns {SuperDocExceptionDiagnosticPayload}
  */
-export function translateExportDiagnostic(error, ctx = {}) {
-  const internalCode =
-    (error && typeof error === 'object' && typeof error.name === 'string' && error.name) || 'export-failed';
-  const message =
-    (error && typeof error === 'object' && typeof error.message === 'string' && error.message) || 'DOCX export failed';
+export function translateExportDiagnostic(
+  error: unknown,
+  ctx: DiagnosticTranslationContext = {},
+): SuperDocExceptionDiagnosticPayload {
+  const fields = error && typeof error === 'object' ? (error as { name?: unknown; message?: unknown }) : {};
+  const internalCode = (typeof fields.name === 'string' && fields.name) || 'export-failed';
+  const message = (typeof fields.message === 'string' && fields.message) || 'DOCX export failed';
   return {
     error,
     diagnosticCode: 'RENDER_ERROR',
