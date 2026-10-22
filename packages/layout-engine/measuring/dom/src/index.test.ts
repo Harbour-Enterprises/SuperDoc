@@ -6490,6 +6490,50 @@ describe('measureBlock', () => {
   });
 
   describe('table measurement with column widths', () => {
+    it('reserves compound border chrome around a two-paragraph quote', async () => {
+      const createTable = (bordered: boolean): FlowBlock => ({
+        kind: 'table',
+        id: 'quote',
+        columnWidths: [200],
+        rows: [
+          {
+            id: 'row',
+            cells: [
+              {
+                id: 'cell',
+                attrs: bordered
+                  ? {
+                      borders: Object.fromEntries(
+                        ['top', 'right', 'bottom', 'left'].map((side) => [
+                          side,
+                          { style: 'thinThickThinLargeGap', width: 4 },
+                        ]),
+                      ),
+                    }
+                  : undefined,
+                blocks: ['Latin quote', 'Translation'].map((text, index) => ({
+                  kind: 'paragraph',
+                  id: `quote-${index}`,
+                  runs: [{ text, fontFamily: 'Arial', fontSize: 12 }],
+                })),
+              },
+            ],
+          },
+        ],
+      });
+      const plain = await measureBlock(createTable(false), { maxWidth: 600 });
+      const framed = await measureBlock(createTable(true), { maxWidth: 600 });
+      if (plain.kind !== 'table' || framed.kind !== 'table') throw new Error('expected tables');
+      expect(framed.rows[0].height - plain.rows[0].height).toBeCloseTo(24);
+      expect(framed.rows[0].cells[0].width).toBe(200);
+      const paragraph = framed.rows[0].cells[0].blocks?.[0];
+      expect(paragraph?.kind).toBe('paragraph');
+      const plainParagraph = plain.rows[0].cells[0].blocks?.[0];
+      if (paragraph?.kind === 'paragraph' && plainParagraph?.kind === 'paragraph') {
+        expect(plainParagraph.lines[0].maxWidth - paragraph.lines[0].maxWidth).toBe(24);
+      }
+    });
+
     it('reserves the authored total width for separate double table borders', async () => {
       const block: FlowBlock = {
         kind: 'table',

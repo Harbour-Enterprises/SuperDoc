@@ -74,6 +74,7 @@ export {
 export {
   buildPageStyleReferenceResolver,
   flowBlocksContainCrossReferenceMetadata,
+  isLiveCrossReferenceFieldCloneOf,
   type PageStyleReferenceResolver,
 } from './resolveLiveCrossReferences';
 export { findWordBoundaries, findParagraphBoundaries } from './text-boundaries';

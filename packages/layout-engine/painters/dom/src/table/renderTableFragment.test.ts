@@ -3,8 +3,16 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
-import { renderTableFragment } from './renderTableFragment.js';
+import {
+  applyTableFragmentPatchWork,
+  planTableFragmentPatch,
+  renderTableFragment,
+  type TableRenderDependencies,
+} from './renderTableFragment.js';
+import { completeRenderWork } from '../render-work.js';
 import type {
+  CellBorders,
+  TableBorders,
   TableBlock,
   TableFragment,
   TableMeasure,
@@ -102,6 +110,281 @@ describe('renderTableFragment', () => {
       pageIndex: 0,
       columnIndex: 0,
     };
+  });
+
+  describe('compound frame patching', () => {
+    const compound = { style: 'thinThickThinLargeGap', width: 4, color: '#112233' } as const;
+    const prepare = (borders: TableBorders) => {
+      const block = createTestTableBlock();
+      const measure = createTestTableMeasure();
+      const fragment = createTestTableFragment();
+      block.attrs = { borderCollapse: 'separate', borders };
+      const none = { style: 'none', width: 0 } as const;
+      block.rows[0].cells[0].attrs = { borders: { top: none, right: none, bottom: none, left: none } };
+      const dependencies = (nextFragment: TableFragment): TableRenderDependencies => ({
+        doc,
+        fragment: nextFragment,
+        context,
+        block,
+        measure,
+        cellSpacingPx: 0,
+        effectiveColumnWidths: measure.columnWidths,
+        renderLine: () => doc.createElement('div'),
+        applyFragmentFrame: (element) => {
+          element.style.width = `${nextFragment.width}px`;
+          element.style.height = `${nextFragment.height}px`;
+        },
+        applySdtDataset: () => {},
+        applyStyles: (element, styles) => Object.assign(element.style, styles),
+      });
+      return { fragment, dependencies, container: renderTableFragment(dependencies(fragment)) };
+    };
+
+    it.each(['width', 'height'] as const)(
+      'rebuilds a resized compound frame (%s) to match a fresh paint',
+      (dimension) => {
+        const { fragment, dependencies, container } = prepare({ top: compound, right: compound });
+        const nextFragment = { ...fragment, [dimension]: fragment[dimension] + 20 };
+        const plan = planTableFragmentPatch({ ...dependencies(nextFragment), container });
+        if (plan) completeRenderWork(applyTableFragmentPatchWork(plan));
+        const actual = plan ? container : renderTableFragment(dependencies(nextFragment));
+        const expected = renderTableFragment(dependencies(nextFragment));
+        const overlay = '[data-superdoc-cell-border-overlay]';
+        expect(actual.querySelector(overlay)?.getAttribute('viewBox')).toBe(
+          expected.querySelector(overlay)?.getAttribute('viewBox'),
+        );
+        expect(actual.outerHTML).toBe(expected.outerHTML);
+        expect(plan).toBeNull();
+      },
+    );
+
+    it.each([
+      ['ordinary frame', { top: { ...compound, style: 'single' } }],
+      ['disabled compound frame', { top: { ...compound, width: 0 } }],
+      ['compound interior border only', { insideH: compound }],
+    ] as const)('keeps dimension-only patches for %s', (_label, borders) => {
+      const { fragment, dependencies, container } = prepare(borders);
+      const nextFragment = { ...fragment, height: fragment.height + 20 };
+      const plan = planTableFragmentPatch({ ...dependencies(nextFragment), container });
+      expect(plan).not.toBeNull();
+      completeRenderWork(applyTableFragmentPatchWork(plan!));
+      expect(container.outerHTML).toBe(renderTableFragment(dependencies(nextFragment)).outerHTML);
+    });
+
+    it('keeps patches when compound frame dimensions are unchanged', () => {
+      const { fragment, dependencies, container } = prepare({ top: compound });
+      const plan = planTableFragmentPatch({ ...dependencies(fragment), container });
+      expect(plan).not.toBeNull();
+      completeRenderWork(applyTableFragmentPatchWork(plan!));
+      expect(container.outerHTML).toBe(renderTableFragment(dependencies(fragment)).outerHTML);
+    });
+  });
+
+  describe.each(['separate frame', 'merged continuation'] as const)('compound borders on %s', (path) => {
+    const compound = { style: 'thinThickThinLargeGap', width: 4, color: '#112233' } as const;
+    const cssColor = (value: string) => {
+      const element = doc.createElement('div');
+      element.style.color = value;
+      return element.style.color;
+    };
+    const renderBorders = (borders: CellBorders, isRtl = false) => {
+      const block = createTestTableBlock();
+      const measure = createTestTableMeasure();
+      const fragment: TableFragment = { ...createTestTableFragment(), width: 200, height: 80 };
+      block.attrs = {
+        tableProperties: { rightToLeft: isRtl },
+        borderCollapse: path === 'separate frame' ? 'separate' : 'collapse',
+        borders: { ...borders, insideV: borders.right },
+      };
+      measure.columnWidths = [120, 80];
+      measure.totalWidth = 200;
+      measure.rows[0].height = 80;
+      measure.rows[0].cells[0].width = 120;
+      measure.rows[0].cells[0].height = 80;
+      measure.rows[0].cells[0].gridColumnStart = 0;
+      if (path === 'merged continuation') {
+        block.rows[0].cells[0].attrs = { rowspan: 2 };
+        block.rows.push({ id: 'row-2', cells: [] });
+        measure.rows[0].cells[0].rowSpan = 2;
+        measure.rows.push({ height: 80, cells: [] });
+        fragment.fromRow = 1;
+        fragment.toRow = 2;
+        fragment.continuesFromPrev = true;
+      } else {
+        const none = { style: 'none', width: 0 } as const;
+        block.attrs.cellSpacing = 2;
+        block.rows[0].cells[0].attrs = { borders: { top: none, right: none, bottom: none, left: none } };
+      }
+      const element = renderTableFragment({
+        doc,
+        fragment,
+        context,
+        block,
+        measure,
+        cellSpacingPx: path === 'separate frame' ? 2 : 0,
+        effectiveColumnWidths: measure.columnWidths,
+        renderLine: () => doc.createElement('div'),
+        applyFragmentFrame: (el) => {
+          el.style.width = `${fragment.width}px`;
+        },
+        applySdtDataset: () => {},
+        applyStyles: (el, styles) => Object.assign(el.style, styles),
+      });
+      const borderedElement =
+        path === 'separate frame'
+          ? element
+          : element.querySelector<HTMLElement>('[data-superdoc-table-row-role="body"]')!;
+      return { element, borderedElement };
+    };
+
+    it.each([false, true])('paints three joined rings on every edge (RTL=%s)', (isRtl) => {
+      const { element, borderedElement } = renderBorders(
+        { top: compound, right: { ...compound, color: '#445566' }, bottom: compound, left: compound },
+        isRtl,
+      );
+      for (const side of ['Top', 'Right', 'Bottom', 'Left'] as const) {
+        expect(borderedElement.style[`border${side}Width`]).toBe('12px');
+        expect(borderedElement.style[`border${side}Color`]).toBe('transparent');
+      }
+      const overlays = element.querySelectorAll<SVGElement>('[data-superdoc-cell-border-overlay]');
+      expect(overlays).toHaveLength(1);
+      const overlay = overlays[0];
+      expect(overlay.parentElement).toBe(element);
+      expect(overlay.style.left).toBe(path === 'separate frame' ? '-12px' : isRtl ? '80px' : '0px');
+      expect(overlay.style.top).toBe(path === 'separate frame' ? '-12px' : '0px');
+      const width = path === 'separate frame' ? 200 : 120;
+      expect(overlay.getAttribute('viewBox')).toBe(`0 0 ${width} 80`);
+      const expectedPaths = {
+        top: [`M 0.5 0.5 H ${width - 0.5}`, `M 6 6 H ${width - 6}`, `M 11.5 11.5 H ${width - 11.5}`],
+        right: [`M ${width - 0.5} 0.5 V 79.5`, `M ${width - 6} 6 V 74`, `M ${width - 11.5} 11.5 V 68.5`],
+        bottom: [`M 0.5 79.5 H ${width - 0.5}`, `M 6 74 H ${width - 6}`, `M 11.5 68.5 H ${width - 11.5}`],
+        left: ['M 0.5 0.5 V 79.5', 'M 6 6 V 74', 'M 11.5 11.5 V 68.5'],
+      };
+      for (const [side, paths] of Object.entries(expectedPaths)) {
+        const paintedPaths = [...overlay.querySelectorAll(`[data-side="${side}"] path`)];
+        expect(paintedPaths.map((line) => line.getAttribute('d'))).toEqual(paths);
+        expect(paintedPaths.map((line) => line.getAttribute('stroke-width'))).toEqual(['1', '2', '1']);
+      }
+      const coloredSide = isRtl ? 'left' : 'right';
+      expect(overlay.querySelector(`[data-side="${coloredSide}"] path`)?.getAttribute('stroke')).toBe('#445566');
+    });
+
+    it.each([false, true])('preserves ordinary edges beside a compound edge (RTL=%s)', (isRtl) => {
+      const { element, borderedElement } = renderBorders(
+        {
+          top: compound,
+          right: { style: 'double', width: 3, color: '#445566' },
+          bottom: { style: 'none', width: 4 },
+          left: { ...compound, width: 0 },
+        },
+        isRtl,
+      );
+      const ordinarySide = isRtl ? 'Left' : 'Right';
+      const zeroSide = isRtl ? 'Right' : 'Left';
+      expect(borderedElement.style[`border${ordinarySide}Style`]).toBe('double');
+      expect(borderedElement.style[`border${ordinarySide}Width`]).toBe('3px');
+      expect(borderedElement.style[`border${ordinarySide}Color`]).toBe(cssColor('#445566'));
+      expect(borderedElement.style[`border${zeroSide}Style`]).toBe('none');
+      expect(borderedElement.style.borderBottomStyle).toBe('none');
+      const overlay = element.querySelector<SVGElement>('[data-superdoc-cell-border-overlay]')!;
+      expect(overlay).not.toBeNull();
+      expect(overlay.querySelectorAll('path')).toHaveLength(3);
+      expect(overlay.querySelectorAll('[data-side="top"] path')).toHaveLength(3);
+      expect(overlay.style.left).toBe(path === 'separate frame' ? (isRtl ? '-3px' : '0px') : isRtl ? '80px' : '0px');
+      expect(overlay.style.top).toBe(path === 'separate frame' ? '-12px' : '0px');
+    });
+
+    it('leaves none, zero-width compound, and ordinary borders on their existing CSS path', () => {
+      const { element, borderedElement } = renderBorders({
+        top: { style: 'none', width: 4 },
+        right: { ...compound, width: 0 },
+        bottom: { style: 'single', width: 2, color: '#112233' },
+        left: { style: 'triple', width: 2, color: '#445566' },
+      });
+      expect(element.querySelector('[data-superdoc-cell-border-overlay]')).toBeNull();
+      expect(borderedElement.style.borderTopStyle).toBe('none');
+      expect(borderedElement.style.borderRightStyle).toBe('none');
+      expect(borderedElement.style.borderBottomWidth).toBe('2px');
+      expect(borderedElement.style.borderBottomColor).toBe(cssColor('#112233'));
+      expect(borderedElement.style.borderLeftWidth).toBe('2px');
+      expect(borderedElement.style.borderLeftColor).toBe(cssColor('#445566'));
+    });
+
+    it('aligns the compound frame when an adjacent thick border has zero width', () => {
+      const { element, borderedElement } = renderBorders({
+        top: compound,
+        left: { style: 'thick', width: 0 },
+      });
+      expect(borderedElement.style.borderLeftStyle).toBe('none');
+      const overlay = element.querySelector<SVGElement>('[data-superdoc-cell-border-overlay]')!;
+      expect(overlay.style.left).toBe('0px');
+    });
+  });
+
+  it('paints inherited compound outer borders continuously across a two-by-two table', () => {
+    const border = { style: 'thinThickThinLargeGap', width: 4, color: '#000000' } as const;
+    const block: TableBlock = {
+      kind: 'table',
+      id: 'compound-table',
+      attrs: { borders: { top: border, right: border, bottom: border, left: border } },
+      rows: [0, 1].map((row) => ({
+        id: `row-${row}`,
+        cells: [0, 1].map((column) => ({
+          id: `cell-${row}-${column}`,
+          paragraph: { kind: 'paragraph', id: `paragraph-${row}-${column}`, runs: [] },
+        })),
+      })),
+    };
+    const measure: TableMeasure = {
+      kind: 'table',
+      totalWidth: 200,
+      totalHeight: 80,
+      columnWidths: [100, 100],
+      rows: [0, 1].map(() => ({
+        height: 40,
+        cells: [0, 1].map((column) => ({
+          width: 100,
+          height: 40,
+          gridColumnStart: column,
+          paragraph: { kind: 'paragraph', lines: [], totalHeight: 16 },
+        })),
+      })),
+    };
+    const element = renderTableFragment({
+      doc,
+      fragment: { kind: 'table', blockId: block.id, fromRow: 0, toRow: 2, x: 0, y: 0, width: 200, height: 80 },
+      context,
+      block,
+      measure,
+      cellSpacingPx: 0,
+      effectiveColumnWidths: measure.columnWidths,
+      renderLine: () => doc.createElement('div'),
+      applyFragmentFrame: () => {},
+      applySdtDataset: () => {},
+      applyStyles: () => {},
+    });
+    const cells = [...element.querySelectorAll<HTMLElement>('[data-superdoc-table-row-role="body"]')];
+    expect(cells).toHaveLength(4);
+    for (const [index, sides] of [
+      [0, ['Top', 'Left']],
+      [1, ['Top', 'Right']],
+      [2, ['Bottom', 'Left']],
+      [3, ['Bottom', 'Right']],
+    ] as const) {
+      for (const side of sides) {
+        expect(cells[index].style[`border${side}Width`]).toBe('12px');
+        expect(cells[index].style[`border${side}Color`]).toBe('transparent');
+      }
+    }
+    const overlays = [...element.querySelectorAll<SVGElement>('[data-superdoc-cell-border-overlay]')];
+    expect(overlays).toHaveLength(4);
+    expect(overlays.map((overlay) => overlay.querySelectorAll('path').length)).toEqual([6, 6, 6, 6]);
+    expect(overlays[0].querySelector('[data-side="top"] path')?.getAttribute('d')).toBe('M 0.5 0.5 H 100');
+    expect(overlays[1].querySelector('[data-side="top"] path')?.getAttribute('d')).toBe('M 0 0.5 H 99.5');
+    expect(overlays[0].querySelector('[data-side="left"] path')?.getAttribute('d')).toBe('M 0.5 0.5 V 40');
+    expect(overlays[2].querySelector('[data-side="left"] path')?.getAttribute('d')).toBe('M 0.5 0 V 39.5');
+    expect(overlays[0].querySelector('[data-side="right"], [data-side="bottom"]')).toBeNull();
+    expect(overlays[3].querySelector('[data-side="left"], [data-side="top"]')).toBeNull();
   });
 
   it.each(['inherited', 'explicit', 'none'] as const)(

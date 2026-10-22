@@ -23,6 +23,7 @@ const ALLOWED_BORDER_STYLES = new Set<BorderStyle>([
   'dotted',
   'thick',
   'triple',
+  'thinThickThinLargeGap',
   'dotDash',
   'dotDotDash',
   'wave',
@@ -48,6 +49,7 @@ const borderStyleToCSS = (style?: BorderStyle): string => {
     dotted: 'dotted',
     thick: 'solid',
     triple: 'solid',
+    thinThickThinLargeGap: 'solid',
     dotDash: 'dashed',
     dotDotDash: 'dashed',
     wave: 'solid',
@@ -67,9 +69,15 @@ const NATIVE_DOUBLE_BORDER_MIN_WIDTH_PX = 3;
 const THIN_DOUBLE_BORDER_DATASET_KEY = 'superdocThinDoubleBorder';
 const THIN_DOUBLE_BORDER_CLASS_NAME = 'superdoc-thin-double-border';
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
-const SVG_CELL_BORDER_STYLES = new Set<BorderStyle>(['dotDash', 'triple', 'wave', 'dashDotStroked']);
+const SVG_CELL_BORDER_STYLES = new Set<BorderStyle>([
+  'dotDash',
+  'triple',
+  'thinThickThinLargeGap',
+  'wave',
+  'dashDotStroked',
+]);
 const needsCellBorderOverlay = (border?: BorderSpec): boolean => {
-  if (!border?.style || border.width === 0) return false;
+  if (!border?.style || (border.width !== undefined && border.width <= 0)) return false;
   const width = border.width ?? 1;
   // Native CSS borders round positive subpixel widths up to one CSS pixel.
   return SVG_CELL_BORDER_STYLES.has(border.style) || (border.style === 'single' && width > 0 && width < 1);
@@ -263,7 +271,7 @@ export const createThinDoubleBorderOverlay = (
 export const applyBorder = (element: HTMLElement, side: BorderSide, border?: BorderSpec): void => {
   if (!border) return;
   clearThinDoubleBorderRasterSide(element, side);
-  if (border.style === 'none' || border.width === 0) {
+  if (border.style === 'none' || (border.width !== undefined && border.width <= 0)) {
     element.style[`border${side}`] = 'none';
     syncThinDoubleBorderRaster(element);
     return;
@@ -358,6 +366,36 @@ export const createCellBorderOverlay = (
   for (const side of sides) {
     const border = borders[side.toLowerCase() as Lowercase<BorderSide>]!;
     const size = Math.max(0, border.width ?? 1);
+    if (border.style === 'thinThickThinLargeGap') {
+      const group = doc.createElementNS(SVG_NAMESPACE, 'g');
+      group.dataset.side = side.toLowerCase();
+      svg.append(group);
+      const color = border.color && isValidHexColor(border.color) ? border.color : '#000000';
+      const layers = [
+        { inset: 0.5, stroke: 1 },
+        { inset: size + 2, stroke: 2 },
+        { inset: 2 * size + 3.5, stroke: 1 },
+      ];
+      for (const [index, layer] of layers.entries()) {
+        const inset = (edge: BorderSide): number => {
+          const adjacent = borders[edge.toLowerCase() as Lowercase<BorderSide>];
+          if (adjacent?.style !== 'thinThickThinLargeGap' || !needsCellBorderOverlay(adjacent)) return 0;
+          const gap = adjacent.width ?? 1;
+          return index === 0 ? 0.5 : index === 1 ? gap + 2 : 2 * gap + 3.5;
+        };
+        const d =
+          side === 'Top'
+            ? `M ${inset('Left')} ${layer.inset} H ${width - inset('Right')}`
+            : side === 'Bottom'
+              ? `M ${inset('Left')} ${height - layer.inset} H ${width - inset('Right')}`
+              : side === 'Left'
+                ? `M ${layer.inset} ${inset('Top')} V ${height - inset('Bottom')}`
+                : `M ${width - layer.inset} ${inset('Top')} V ${height - inset('Bottom')}`;
+        appendPath(group, d, color, layer.stroke);
+        group.setAttribute('stroke-linecap', 'square');
+      }
+      continue;
+    }
     // Word keeps compound strokes and waves legible even when w:sz is below one CSS pixel.
     const paintBand =
       border.style === 'triple'
@@ -491,6 +529,11 @@ export const createCellBorderOverlay = (
       return d;
     };
     switch (border.style) {
+      case 'thinThickThinLargeGap':
+        appendDiagonal(line(-size - 1.5), 1);
+        appendDiagonal(line(0), 2);
+        appendDiagonal(line(size + 1.5), 1);
+        break;
       case 'double':
       case 'triple': {
         const offsets = border.style === 'double' ? [-size / 3, size / 3] : [-size * 0.4, 0, size * 0.4];

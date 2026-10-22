@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { isExplicitNoneBorder, isPresentBorder, resolveBorderConflict } from './index.js';
+import {
+  getRenderedTableBorderWidthPx,
+  isExplicitNoneBorder,
+  isPresentBorder,
+  resolveBorderConflict,
+} from './index.js';
 
 describe('table border conflict contract', () => {
   it('selects the present side when the opposing cell explicitly has no border', () => {
@@ -45,5 +50,23 @@ describe('table border conflict contract', () => {
     const smallGap = { style: 'dashSmallGap', width: 2 / 3, color: '#000000' } as const;
     expect(resolveBorderConflict(single, smallGap)).toEqual(smallGap);
     expect(resolveBorderConflict(single, { style: 'dashed', width: 2 / 3, color: '#000000' })).toEqual(single);
+  });
+});
+
+describe('compound table border geometry', () => {
+  it.each([8, 16, 24, 32])('reserves fixed strokes and authored gaps for size %s', (size) => {
+    expect(getRenderedTableBorderWidthPx({ style: 'thinThickThinLargeGap', width: size / 6 })).toBeCloseTo(
+      4 + size / 3,
+    );
+  });
+  it('suppresses zero and absent compound borders while preserving double widths', () => {
+    expect(getRenderedTableBorderWidthPx({ style: 'thinThickThinLargeGap', width: 0 })).toBe(0);
+    expect(getRenderedTableBorderWidthPx({ style: 'none', width: 4 })).toBe(0);
+    expect(getRenderedTableBorderWidthPx({ style: 'double', width: 4 })).toBe(4);
+  });
+  it('uses the compound border number when resolving competing edges', () => {
+    const compound = { style: 'thinThickThinLargeGap', width: 1 } as const;
+    expect(resolveBorderConflict({ style: 'triple', width: 1 }, compound)).toEqual(compound);
+    expect(resolveBorderConflict({ style: 'wave', width: 1 }, compound)).toEqual({ style: 'wave', width: 1 });
   });
 });

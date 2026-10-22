@@ -1,5 +1,6 @@
 import { completeRenderWork, type RenderWork } from '../render-work.js';
 import type {
+  CellBorders,
   DrawingBlock,
   DrawingMeasure,
   Fragment,
@@ -10,7 +11,7 @@ import type {
   TableFragment,
   TableMeasure,
 } from '@superdoc/contracts';
-import { getTableVisualDirection } from '@superdoc/contracts';
+import { getRenderedTableBorderWidthPx, getTableVisualDirection } from '@superdoc/contracts';
 import type { ResolvePhysicalFamily } from '@superdoc/font-system';
 import { CLASS_NAMES, fragmentStyles } from '../styles.js';
 import { DOM_CLASS_NAMES } from '../constants.js';
@@ -26,10 +27,31 @@ import {
   type SdtAncestorOptions,
   type SdtBoundaryOptions,
 } from '../sdt/container.js';
-import { applyBorder, borderValueToSpec, hasExplicitCellBorders } from './border-utils.js';
+import {
+  applyCellBorders,
+  borderValueToSpec,
+  createCellBorderOverlay,
+  hasExplicitCellBorders,
+} from './border-utils.js';
 import { getTableCellGridBounds } from './grid-geometry.js';
 
 type ApplyStylesFn = (el: HTMLElement, styles: Partial<CSSStyleDeclaration>) => void;
+
+const applyFragmentBorders = (
+  doc: Document,
+  element: HTMLElement,
+  borders: CellBorders,
+  geometry: { left: string; top: string; width: number; height: number },
+): SVGSVGElement | null => {
+  applyCellBorders(element, borders);
+  const compoundBorders: CellBorders = {};
+  for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+    if (borders[side]?.style === 'thinThickThinLargeGap') compoundBorders[side] = borders[side];
+  }
+  applyCellBorders(element, compoundBorders, true);
+  return createCellBorderOverlay(doc, compoundBorders, geometry);
+};
+
 /**
  * Dependencies required for rendering a table fragment.
  *
@@ -303,10 +325,21 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
 
   const borderCollapse = block.attrs?.borderCollapse ?? (block.attrs?.cellSpacing != null ? 'separate' : 'collapse');
   if (borderCollapse === 'separate' && tableBorders) {
-    applyBorder(container, 'Top', borderValueToSpec(tableBorders.top));
-    applyBorder(container, 'Right', borderValueToSpec(isRtl ? tableBorders.left : tableBorders.right));
-    applyBorder(container, 'Bottom', borderValueToSpec(tableBorders.bottom));
-    applyBorder(container, 'Left', borderValueToSpec(isRtl ? tableBorders.right : tableBorders.left));
+    const borders = {
+      top: borderValueToSpec(tableBorders.top),
+      right: borderValueToSpec(isRtl ? tableBorders.left : tableBorders.right),
+      bottom: borderValueToSpec(tableBorders.bottom),
+      left: borderValueToSpec(isRtl ? tableBorders.right : tableBorders.left),
+    };
+    const leftWidth = (borders.left?.width ?? 1) > 0 ? getRenderedTableBorderWidthPx(borders.left, 1) : 0;
+    const topWidth = (borders.top?.width ?? 1) > 0 ? getRenderedTableBorderWidthPx(borders.top, 1) : 0;
+    const overlay = applyFragmentBorders(doc, container, borders, {
+      left: `${-leftWidth}px`,
+      top: `${-topWidth}px`,
+      width: fragment.width,
+      height: fragment.height,
+    });
+    if (overlay) container.appendChild(overlay);
   }
 
   // Pre-calculate all row heights for rowspan calculations
@@ -507,6 +540,7 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
         const touchesFragmentBottom =
           cellSpacingPx === 0 && spanEndRow >= fragment.toRow && fragment.continuesOnNext === true;
 
+        let ghostBorderOverlay: SVGSVGElement | null = null;
         if (tableBorders) {
           // Resolve borders using logical positions
           const topB = (explicit ? cellBordersAttr.top : undefined) ?? borderValueToSpec(tableBorders.top);
@@ -531,10 +565,12 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
             rightB = tmp;
           }
 
-          applyBorder(ghostDiv, 'Top', topB);
-          applyBorder(ghostDiv, 'Left', leftB);
-          applyBorder(ghostDiv, 'Right', rightB);
-          if (bottomB) applyBorder(ghostDiv, 'Bottom', bottomB);
+          ghostBorderOverlay = applyFragmentBorders(
+            doc,
+            ghostDiv,
+            { top: topB, left: leftB, right: rightB, bottom: bottomB },
+            { left: ghostDiv.style.left, top: ghostDiv.style.top, width: ghostWidth, height: ghostHeight },
+          );
         }
 
         // Apply cell background if present
@@ -543,6 +579,7 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
         }
 
         container.appendChild(ghostDiv);
+        if (ghostBorderOverlay) container.appendChild(ghostBorderOverlay);
         ghostCells += 1;
       }
     }
@@ -998,6 +1035,15 @@ export function planTableFragmentPatch(input: TableFragmentPatchInput): TableFra
   const previous = tablePaintLedgers.get(container);
   if (!previous || previous.fragment.blockId !== fragment.blockId || previous.block.id !== block.id) return null;
   if (previous.chrome !== input.chrome || previous.sdtChrome || previous.ghostCells > 0) return null;
+  if (
+    (fragment.width !== previous.fragment.width || fragment.height !== previous.fragment.height) &&
+    (block.attrs?.borderCollapse ?? (block.attrs?.cellSpacing != null ? 'separate' : 'collapse')) === 'separate' &&
+    (['top', 'right', 'bottom', 'left'] as const).some((side) => {
+      const border = borderValueToSpec(block.attrs?.borders?.[side]);
+      return border?.style === 'thinThickThinLargeGap' && (border.width ?? 1) > 0;
+    })
+  )
+    return null;
   if (fragment.partialRow || previous.fragment.partialRow) return null;
   if (fragment.mergedCellContent?.length || previous.fragment.mergedCellContent?.length) return null;
   if (

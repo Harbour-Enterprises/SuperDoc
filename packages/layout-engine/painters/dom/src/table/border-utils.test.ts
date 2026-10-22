@@ -804,3 +804,49 @@ describe('resolveBorderConflict (ECMA-376 §17.4.66)', () => {
     expect(resolveBorderConflict(light, dark)).toEqual(dark);
   });
 });
+
+describe('thinThickThinLargeGap borders', () => {
+  const border = { style: 'thinThickThinLargeGap', width: 4, color: '#000000' } as const;
+  const borders = { top: border, right: border, bottom: border, left: border };
+  it('reserves twelve transparent pixels per side for SVG paint', () => {
+    const cell = document.createElement('div');
+    applyCellBorders(cell, borders, true);
+    for (const side of ['Top', 'Right', 'Bottom', 'Left'] as const) {
+      expect(cell.style[`border${side}Width`]).toBe('12px');
+      expect(cell.style[`border${side}Color`]).toBe('transparent');
+    }
+  });
+  it('paints three continuous inset rings with fixed thin/thick/thin strokes', () => {
+    const svg = createCellBorderOverlay(document, borders, { left: '0px', top: '0px', width: 100, height: 60 })!;
+    expect(svg).not.toBeNull();
+    expect(svg.querySelectorAll('path')).toHaveLength(12);
+    expect(Array.from(svg.querySelectorAll('[data-side="top"] path'), (path) => path.getAttribute('d'))).toEqual([
+      'M 0.5 0.5 H 99.5',
+      'M 6 6 H 94',
+      'M 11.5 11.5 H 88.5',
+    ]);
+    expect(Array.from(svg.querySelectorAll('[data-side="left"] path'), (path) => path.getAttribute('d'))).toEqual([
+      'M 0.5 0.5 V 59.5',
+      'M 6 6 V 54',
+      'M 11.5 11.5 V 48.5',
+    ]);
+    expect(
+      Array.from(svg.querySelectorAll('[data-side="top"] path'), (path) => path.getAttribute('stroke-width')),
+    ).toEqual(['1', '2', '1']);
+    expect(svg.querySelector('[data-side="right"] path')?.getAttribute('d')).toBe('M 99.5 0.5 V 59.5');
+    expect(svg.querySelector('[data-side="bottom"] path')?.getAttribute('d')).toBe('M 0.5 59.5 H 99.5');
+  });
+  it('also paints diagonal compound edges', () => {
+    const diagonal = createCellBorderOverlay(
+      document,
+      { tl2br: border },
+      { left: '0px', top: '0px', width: 100, height: 60 },
+    )!;
+    expect(diagonal.querySelectorAll('path')).toHaveLength(3);
+    expect(Array.from(diagonal.querySelectorAll('path'), (path) => path.getAttribute('stroke-width'))).toEqual([
+      '1',
+      '2',
+      '1',
+    ]);
+  });
+});

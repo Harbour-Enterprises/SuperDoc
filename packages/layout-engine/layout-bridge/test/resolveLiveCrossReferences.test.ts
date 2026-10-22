@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { FlowBlock, Layout, ParagraphBlock, TextRun } from '@superdoc/contracts';
-import { buildPageStyleReferenceResolver, resolveLiveCrossReferences } from '../src/resolveLiveCrossReferences';
+import {
+  buildPageStyleReferenceResolver,
+  isLiveCrossReferenceFieldCloneOf,
+  resolveLiveCrossReferences,
+} from '../src/resolveLiveCrossReferences';
 import { incrementalLayout, measureCache } from '../src/incrementalLayout';
 import { createCanonicalPaginationSourceReader } from '@superdoc/layout-engine/internal-source-preparation';
 
@@ -116,6 +120,8 @@ describe('resolveLiveCrossReferences', () => {
     expect((result.blocks[0] as ParagraphBlock).runs[0]!.text).toBe('Current target');
     expect(result.blocks).not.toBe(source);
     expect(source[0]!.runs[0]!.text).toBe('stale');
+    expect(isLiveCrossReferenceFieldCloneOf(result.blocks[0], source[0]!)).toBe(true);
+    expect(isLiveCrossReferenceFieldCloneOf(result.blocks[0], { ...source[0]! })).toBe(false);
   });
 
   it('re-evaluates REF content from current bookmark text and reports a deleted target truthfully', () => {

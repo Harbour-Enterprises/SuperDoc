@@ -12,6 +12,13 @@ import type {
 
 const BROKEN_REFERENCE_RESULT = 'Error! Reference source not found.';
 const MISSING_STYLE_RESULT = 'Error! No text of specified style in document.';
+const liveCrossReferenceSourceBlocks = new WeakMap<FlowBlock, FlowBlock>();
+
+export function isLiveCrossReferenceFieldCloneOf(block: unknown, source: FlowBlock): block is FlowBlock {
+  return (
+    typeof block === 'object' && block !== null && liveCrossReferenceSourceBlocks.get(block as FlowBlock) === source
+  );
+}
 
 export interface PageStyleReferenceRequest {
   pageNumber: number;
@@ -71,6 +78,12 @@ export function cloneLiveCrossReferenceFieldBlocks<T extends FlowBlock>(blocks: 
 }
 
 function cloneLiveCrossReferenceFieldBlock(block: FlowBlock): FlowBlock {
+  const clone = cloneLiveCrossReferenceFieldBlockContents(block);
+  if (clone !== block) liveCrossReferenceSourceBlocks.set(clone, block);
+  return clone;
+}
+
+function cloneLiveCrossReferenceFieldBlockContents(block: FlowBlock): FlowBlock {
   if (block.kind === 'paragraph') {
     const paragraph = block as ParagraphBlock;
     if (!paragraph.runs.some((run) => asTextRun(run)?.crossReferenceMetadata != null)) return block;

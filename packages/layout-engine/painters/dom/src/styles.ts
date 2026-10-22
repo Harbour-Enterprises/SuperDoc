@@ -1636,7 +1636,8 @@ const FOOTNOTE_STYLES = `
 /* SD-3400: body reference markers are interactive (double-click opens the
  * note). Pointer cursor + a hover pill signal clickability without affecting
  * layout (background/box-shadow are paint-only). */
-[data-note-reference] {
+[data-note-reference],
+[data-v2-note-ref] {
   cursor: pointer;
   border-radius: 2px;
   position: relative;
@@ -1644,12 +1645,14 @@ const FOOTNOTE_STYLES = `
 /* The painted digit is ~6x11px — far too small to hover or double-click
  * reliably. An invisible pseudo-element halo expands the interactive target
  * (hover, cursor, clicks all hit the marker span) without moving any text. */
-[data-note-reference]::after {
+[data-note-reference]::after,
+[data-v2-note-ref]::after {
   content: '';
   position: absolute;
   inset: -4px -5px;
 }
-[data-note-reference]:hover {
+[data-note-reference]:hover,
+[data-v2-note-ref]:hover {
   background-color: var(--sd-content-controls-block-hover-bg, #d3e3fd);
   box-shadow: 0 0 0 2px var(--sd-content-controls-block-hover-bg, #d3e3fd);
 }

@@ -1083,6 +1083,7 @@ export type BorderStyle =
   | 'dotted'
   | 'thick'
   | 'triple'
+  | 'thinThickThinLargeGap'
   | 'dotDash'
   | 'dotDotDash'
   | 'wave'
@@ -1097,17 +1098,13 @@ export type BorderSpec = {
   space?: number;
 };
 
-/**
- * Returns the complete painted width of an OOXML table border in CSS pixels.
- * `w:sz` is the width of the complete border, including compound styles such
- * as double. `thick` retains the existing table-painter minimum used in V2.
- */
 export const getRenderedTableBorderWidthPx = (
   border: Pick<BorderSpec, 'style' | 'width'> | undefined,
   defaultWidth = 0,
 ): number => {
   if (!border || border.style === 'none') return 0;
   const authoredWidth = Math.max(0, typeof border.width === 'number' ? border.width : defaultWidth);
+  if (border.style === 'thinThickThinLargeGap') return authoredWidth > 0 ? 4 + 2 * authoredWidth : 0;
   if (border.style === 'thick') return Math.max(authoredWidth * 2, 3);
   return authoredWidth;
 };
@@ -1150,6 +1147,7 @@ const TABLE_BORDER_STYLE_NUMBER: Partial<Record<BorderStyle, number>> = {
   dotDash: 8,
   dotDotDash: 9,
   triple: 10,
+  thinThickThinLargeGap: 19,
   wave: 20,
   doubleWave: 21,
   dashDotStroked: 23,
