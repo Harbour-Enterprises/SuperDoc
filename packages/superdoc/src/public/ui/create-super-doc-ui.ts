@@ -2234,8 +2234,30 @@ interface FormatPainterParagraphSnapshot {
 interface FormatPainterSnapshot {
   story: unknown | null;
   inline: Record<string, unknown>;
+  mixedInlineKeys: string[];
   paragraph: FormatPainterParagraphSnapshot | null;
 }
+
+const FORMAT_PAINTER_BOOLEAN_KEYS = new Set([
+  'bold',
+  'italic',
+  'underline',
+  'strike',
+  'dstrike',
+  'smallCaps',
+  'caps',
+  'outline',
+  'shadow',
+  'emboss',
+  'imprint',
+  'rtl',
+  'cs',
+  'bCs',
+  'iCs',
+  'vanish',
+  'webHidden',
+  'specVanish',
+]);
 
 interface FormatPainterState {
   mode: FormatPainterMode;
@@ -9946,24 +9968,30 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     if (!doc) return null;
     const sourceStory = selTarget['story'];
 
-    // Inline capture: intersect run props across all covered blocks
-    let mergedRunProps: Record<string, unknown> | null = null;
-    for (const segment of segments) {
+    const sourceSelection = captureSlice ?? selectionSliceFromInfo(selection, 'ready');
+    const effectiveInput = effectiveInlineUniformityInput(sourceSelection);
+    const sourceWholeCells = Boolean(effectiveInput?.tableCellSelection);
+    const coveredRunProps: Record<string, unknown>[] = [];
+    // A terminal zero-width segment locates the selected paragraph mark; its
+    // following paragraph contributes neither text nor formatting to the source.
+    for (const segment of formatPainterTextSegments(segments)) {
       const nodeResult = (await readBlockNode(paragraphTarget(segment['blockId'] as string, sourceStory))) as
         | LooseRecord
         | undefined;
       const node = (nodeResult?.['node'] as LooseRecord | undefined) ?? null;
-      if (!node) continue;
+      if (!node) return null;
       const para = getParagraphLikeData(node);
       const runs = (Array.isArray(para?.['inlines']) ? para!['inlines'] : []) as LooseRecord[];
-      const slicedProps = sliceAndIntersectRunProps(runs, segment['range'] as { start: number; end: number });
-      if (!mergedRunProps) {
-        mergedRunProps = slicedProps;
-      } else {
-        mergedRunProps = intersectRunProps(mergedRunProps, slicedProps);
-      }
+      coveredRunProps.push(...sliceRunProps(runs, segment['range'] as { start: number; end: number }));
     }
-    const inlinePatch = mergedRunProps ? sdRunPropsToInlineRunPatch(mergedRunProps) : {};
+    const mergedRunProps = coveredRunProps.length
+      ? intersectRunProps(coveredRunProps[0], ...coveredRunProps.slice(1))
+      : {};
+    const inlinePatch = sdRunPropsToInlineRunPatch(mergedRunProps);
+    const presentKeys = new Set(coveredRunProps.flatMap((props) => Object.keys(sdRunPropsToInlineRunPatch(props))));
+    // A mixed value is intentionally omitted. Uniform absence instead permits
+    // clearing the corresponding target property when the snapshot is applied.
+    const mixedInlineKeys = new Set([...presentKeys].filter((key) => !(key in inlinePatch)));
 
     // Backfill inline marks that are cascade-resolved by the controller but may
     // be absent from raw run props (style-inherited formatting).
@@ -10001,25 +10029,56 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       if (!Number.isNaN(fontSize)) inlinePatch['fontSize'] = fontSize;
     }
 
-    // Paragraph capture: when selection is within exactly one paragraph block.
-    // Word behavior: paragraph formatting is captured whenever the cursor is inside
-    // a paragraph, regardless of whether the whole paragraph is selected.
+    const effective = await readEffectiveInlineUniformityNow(
+      effectiveInput
+        ? { ...effectiveInput, keys: [...EFFECTIVE_INLINE_UNIFORMITY_KEYS, 'highlight'], includeCaret: true }
+        : null,
+    );
+    for (const [markName, patchKey] of Object.entries(MARK_TO_PATCH)) {
+      const entry = effective?.values?.[markName] as LooseRecord | undefined;
+      if (!entry) continue;
+      if (entry.state === 'uniform' && (entry.value === 'true' || entry.value === 'false')) {
+        inlinePatch[patchKey] = entry.value === 'true';
+        mixedInlineKeys.delete(patchKey);
+      } else {
+        delete inlinePatch[patchKey];
+        mixedInlineKeys.add(patchKey);
+      }
+    }
+
+    // getNode may expose text-only runs. Resolve highlight absence explicitly
+    // rather than relying on raw target properties to discover its reset key.
+    const highlight = effective?.values?.highlight as LooseRecord | undefined;
+    if (highlight?.state === 'uniform' && typeof highlight.value === 'string') {
+      // Explicit none suppresses inherited highlighting; null would restore it.
+      inlinePatch.highlight = highlight.value;
+      mixedInlineKeys.delete('highlight');
+    } else if (highlight) {
+      delete inlinePatch.highlight;
+      mixedInlineKeys.add('highlight');
+    }
+
+    // Paragraph properties belong to a caret, whole-cell source, or selected paragraph mark.
+    // Selecting visible characters alone must not copy paragraph formatting.
     let paragraphSnapshot: FormatPainterParagraphSnapshot | null = null;
-    if (segments.length === 1) {
-      const segment = segments[0];
+    const paragraphSegments = formatPainterParagraphSegments(segments, sourceWholeCells);
+    if (paragraphSegments.length === 1) {
+      const segment = paragraphSegments[0];
       const nodeResult = (await readBlockNode(paragraphTarget(segment['blockId'] as string, sourceStory))) as
         | LooseRecord
         | undefined;
       const node = (nodeResult?.['node'] as LooseRecord | undefined) ?? null;
-      if (node) {
-        const para = getParagraphLikeData(node);
-        if (para) {
-          paragraphSnapshot = await extractParagraphSnapshot(node, segment['blockId'] as string, doc, sourceStory);
-        }
+      if (node && getParagraphLikeData(node)) {
+        paragraphSnapshot = await extractParagraphSnapshot(node, segment['blockId'] as string, doc, sourceStory);
       }
     }
 
-    return { story: sourceStory ?? null, inline: inlinePatch, paragraph: paragraphSnapshot };
+    return {
+      story: sourceStory ?? null,
+      inline: inlinePatch,
+      mixedInlineKeys: [...mixedInlineKeys],
+      paragraph: paragraphSnapshot,
+    };
   };
 
   const getParagraphLikeData = (node: LooseRecord): LooseRecord | null => {
@@ -10029,51 +10088,38 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     return null;
   };
 
-  const sliceAndIntersectRunProps = (
-    runs: LooseRecord[],
-    range: { start: number; end: number },
-  ): Record<string, unknown> => {
-    // Collapsed caret: find the run at the caret position and take its props directly.
-    // The empty-range loop below would skip every run via boundary conditions.
-    // SDRun shape: { kind: 'run', run: { text: string, props?: SDRunProps } }
-    const getRunText = (r: LooseRecord): string => {
-      const inner = r['run'] as LooseRecord | undefined;
-      return typeof inner?.['text'] === 'string' ? (inner!['text'] as string) : '';
-    };
-    const getRunProps = (r: LooseRecord): Record<string, unknown> | undefined => {
-      const inner = r['run'] as LooseRecord | undefined;
-      return inner?.['props'] as Record<string, unknown> | undefined;
-    };
+  const formatPainterTextSegments = (segments: LooseRecord[]): LooseRecord[] =>
+    segments.length > 1 && segments.at(-1)?.range?.start === segments.at(-1)?.range?.end
+      ? segments.slice(0, -1)
+      : segments;
 
-    if (range.start === range.end) {
-      let offset = 0;
-      for (const run of runs) {
-        const text = getRunText(run);
-        const runStart = offset;
-        const runEnd = offset + text.length;
-        offset = runEnd;
-        if (range.start >= runStart && range.start <= runEnd) {
-          const rPr = getRunProps(run);
-          return rPr ? { ...rPr } : {};
-        }
-      }
-      return {};
-    }
+  const formatPainterParagraphSegments = (segments: LooseRecord[], wholeCells = false): LooseRecord[] => {
+    if (wholeCells) return formatPainterTextSegments(segments);
+    if (segments.length === 1 && segments[0].range?.start === segments[0].range?.end) return segments;
+    // Every segment before the endpoint crosses its paragraph mark. The final
+    // segment has no selected paragraph mark, even when all its text is selected.
+    return segments.slice(0, -1);
+  };
 
+  const sliceRunProps = (runs: LooseRecord[], range: { start: number; end: number }): Record<string, unknown>[] => {
     let offset = 0;
     const covered: Record<string, unknown>[] = [];
     for (const run of runs) {
-      const text = getRunText(run);
-      const runStart = offset;
-      const runEnd = offset + text.length;
-      offset = runEnd;
-      if (runEnd <= range.start || runStart >= range.end) continue;
-      const rPr = getRunProps(run);
-      if (rPr) covered.push(rPr);
+      const inner = run['run'] as LooseRecord | undefined;
+      const text = typeof inner?.['text'] === 'string' ? inner['text'] : '';
+      const start = offset;
+      const end = offset + text.length;
+      offset = end;
+      const props = (inner?.['props'] as Record<string, unknown> | undefined) ?? {};
+      if (range.start === range.end) {
+        if (range.start >= start && range.start <= end) return [{ ...props }];
+      } else if (end > range.start && start < range.end) {
+        // Plain runs are part of the intersection too; missing props is not a
+        // missing run and must not make a mixed source look uniformly formatted.
+        covered.push(props);
+      }
     }
-    if (covered.length === 0) return {};
-    if (covered.length === 1) return { ...covered[0] };
-    return intersectRunProps(covered[0], ...covered.slice(1));
+    return covered;
   };
 
   const intersectRunProps = (
@@ -10210,6 +10256,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
     const doc = painterCommandDoc ?? getDoc();
     if (!doc) return;
+    const ownerEditor = getEditor();
+    const ownerDoc = ownerEditor?.doc;
+    const ownerMode = readDocumentMode();
 
     const targetSelection = selectionSliceFromInfo(selection, 'ready');
     const { lockModesById } = computeActiveContentControlLockModes(
@@ -10227,10 +10276,36 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
     const selectionIsEmpty = (selection as LooseRecord)['empty'] === true;
 
-    // Inline apply: only when text is selected. Skip for collapsed caret —
-    // paragraph formatting applies at cursor position, but character formatting
-    // requires actual text to be selected (Word behavior).
-    if (!selectionIsEmpty && Object.keys(snap.inline).length > 0) {
+    const segments = Array.isArray(selTarget?.['segments']) ? (selTarget!['segments'] as LooseRecord[]) : [];
+    const targetStory = selTarget?.['story'];
+    const inline = { ...snap.inline };
+    if (!selectionIsEmpty) {
+      for (const segment of formatPainterTextSegments(segments)) {
+        const result = await readBlockNode(paragraphTarget(segment['blockId'] as string, targetStory));
+        const node = result?.node as LooseRecord | undefined;
+        const para = node ? getParagraphLikeData(node) : null;
+        const runs = (Array.isArray(para?.inlines) ? para.inlines : []) as LooseRecord[];
+        for (const props of sliceRunProps(runs, segment.range as { start: number; end: number })) {
+          for (const key of Object.keys(sdRunPropsToInlineRunPatch(props))) {
+            if (!(key in inline) && !snap.mixedInlineKeys.includes(key)) {
+              inline[key] = FORMAT_PAINTER_BOOLEAN_KEYS.has(key) ? false : null;
+            }
+          }
+        }
+      }
+      if (
+        disposed ||
+        painter.snapshot !== snap ||
+        getEditor() !== ownerEditor ||
+        ownerEditor?.doc !== ownerDoc ||
+        readDocumentMode() !== ownerMode
+      )
+        return;
+    }
+
+    // Explicit OFF overrides inherited marks; null removes target-only values.
+    // A caret target receives paragraph formatting without changing its text.
+    if (!selectionIsEmpty && Object.keys(inline).length > 0) {
       const inlineOp = resolveDocOperation(doc, 'format.apply');
       if (inlineOp && selectionTarget) {
         try {
@@ -10238,7 +10313,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
             callInlineFormatMutation(
               'format.apply',
               inlineOp,
-              { target: selectionTarget, inline: snap.inline },
+              { target: selectionTarget, inline },
               selection,
               tableCellSelection,
             ),
@@ -10254,13 +10329,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       }
     }
 
-    // Paragraph apply: applied to every paragraph touched by the selection.
-    // Word behavior: paragraph formatting applies whenever the cursor is inside
-    // a paragraph, regardless of how much of it is selected.
     if (snap.paragraph) {
-      const segments = Array.isArray(selTarget?.['segments']) ? (selTarget!['segments'] as LooseRecord[]) : [];
-      const targetStory = selTarget?.['story'];
-      for (const segment of segments) {
+      for (const segment of formatPainterParagraphSegments(segments, Boolean(tableCellSelection))) {
         const blockAddress = paragraphTarget(segment['blockId'] as string, targetStory);
         const nodeResult = (await readBlockNode(blockAddress)) as LooseRecord | undefined;
         const node = (nodeResult?.['node'] as LooseRecord | undefined) ?? null;
@@ -10277,8 +10347,17 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         };
         const { styleId, alignment, spacing, indentation, markRunProps, numbering, listStyle } = snap.paragraph;
 
+        const targetProps = getParagraphLikeData(node)?.props as LooseRecord | undefined;
         if (styleId) await (doc as LooseRecord).styles?.paragraph?.setStyle?.({ target, styleId });
+        else if (getParagraphLikeData(node)?.styleRef)
+          await (doc as LooseRecord).styles?.paragraph?.clearStyle?.({ target });
         if (alignment) await (doc as LooseRecord).format?.paragraph?.setAlignment?.({ target, alignment });
+        else if (targetProps?.alignment != null)
+          await (doc as LooseRecord).format?.paragraph?.clearAlignment?.({ target });
+        // Replace these groups, including fields absent from a nonempty source
+        // group, without resetting unrelated pPr such as borders or section data.
+        if (targetProps?.spacing != null) await (doc as LooseRecord).format?.paragraph?.clearSpacing?.({ target });
+        if (targetProps?.indent != null) await (doc as LooseRecord).format?.paragraph?.clearIndentation?.({ target });
         if (spacing) {
           const sp = spacing as Record<string, unknown>;
           const rawLr = (sp['lineRule'] as string | undefined) ?? 'auto';

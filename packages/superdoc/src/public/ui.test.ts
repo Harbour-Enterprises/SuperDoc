@@ -3700,6 +3700,8 @@ describe('public ui — command reason taxonomy', () => {
       targetRange?: { start: number; end: number };
       sourceEmpty?: boolean;
       targetEmpty?: boolean;
+      sourceParagraphMark?: boolean;
+      targetParagraphMark?: boolean;
       story?: Record<string, unknown>;
       sourceText?: string;
       targetText?: string;
@@ -3766,6 +3768,23 @@ describe('public ui — command reason taxonomy', () => {
       activeChangeIds: [] as string[],
       text: targetEmpty ? '' : targetText.slice(targetRange.start, targetRange.end),
     };
+
+    // A paragraph mark is the boundary ending at the next paragraph's start,
+    // not the final visible character of the current paragraph.
+    if (
+      opts.sourceParagraphMark ??
+      (opts.sourceParagraphProps && !sourceEmpty && sourceRange.end >= sourceText.length)
+    ) {
+      sourceSelection.target.segments.push({ blockId: 'P2', range: { start: 0, end: 0 } });
+      sourceSelection.selectionTarget.end = { ...sourceSelection.selectionTarget.end, blockId: 'P2', offset: 0 };
+    }
+    if (
+      opts.targetParagraphMark ??
+      (opts.sourceParagraphProps && !targetEmpty && targetRange.end >= targetText.length)
+    ) {
+      targetSelection.target.segments.push({ blockId: 'P3', range: { start: 0, end: 0 } });
+      targetSelection.selectionTarget.end = { ...targetSelection.selectionTarget.end, blockId: 'P3', offset: 0 };
+    }
 
     let currentSelection: Record<string, unknown> = sourceSelection;
     const apply = vi.fn(opts.applyResult ?? (() => ({ success: true })));
@@ -4285,6 +4304,7 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledTimes(1);
     expect(ui.commands.get('copy-format').getState().active).toBe(true);
   });
@@ -4302,6 +4322,7 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledWith(
       {
@@ -4327,6 +4348,7 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledWith(
       {
         target: targetSelection.selectionTarget,
@@ -4407,6 +4429,7 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledTimes(1);
     expect(setAlignment).not.toHaveBeenCalled();
     expect(ui.commands.get('copy-format').getState().active).toBe(true);
@@ -4474,6 +4497,7 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledWith(
       {
         target: targetSelection.selectionTarget,
@@ -4587,6 +4611,7 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledWith(
       {
         target: targetSelection.selectionTarget,
@@ -4679,6 +4704,7 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledWith(
       {
@@ -4718,6 +4744,7 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledWith(
       { target: targetSelection.selectionTarget, inline: { bold: true } },
       { offsetSpace: 'selection' },
@@ -4749,13 +4776,60 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledWith(
       { target: targetSelection.selectionTarget, inline: { color: '#D2003F' } },
       { offsetSpace: 'selection' },
     );
   });
 
-  it('copy-format transfers paragraph formatting even for partial source selection (Word behavior)', async () => {
+  it('SD-5426 copy-format retains whole-cell paragraph capture when the source context changes during a query', async () => {
+    let finishQuery: (value: unknown) => void = () => undefined;
+    const pendingQuery = new Promise((resolve) => {
+      finishQuery = resolve;
+    });
+    const queryMatch = vi.fn(() => pendingQuery);
+    const { superdoc, setAlignment, setSelection, targetSelection } = makeFormatPainterSuperdoc({
+      sourceParagraphProps: { alignment: 'center' },
+      sourceParagraphMark: false,
+      targetParagraphMark: false,
+      targetEmpty: true,
+      targetRange: { start: 2, end: 2 },
+      queryMatch,
+    });
+    let cells = true;
+    const rawTarget = {
+      kind: 'selection',
+      start: { kind: 'text', blockId: 'P1', offset: 0 },
+      end: { kind: 'text', blockId: 'P1', offset: 5 },
+    };
+    superdoc.activeEditor.host = {
+      getHandles: () => ({
+        selection: {
+          getSnapshot: () => ({ tableCells: cells }),
+          toSelectionTarget: () => ({ kind: 'ok', mode: 'range', target: rawTarget }),
+        },
+      }),
+    } as any;
+    const ui = createSuperDocUI({ superdoc });
+    const readsBeforeCapture = queryMatch.mock.calls.length;
+    const capture = ui.commands.executeAsync('copy-format');
+    await vi.waitFor(() => expect(queryMatch.mock.calls.length).toBeGreaterThan(readsBeforeCapture));
+    cells = false;
+    setSelection(targetSelection);
+    finishQuery({ items: [] });
+    expect(await capture).toBe(true);
+    ui.formatPainter.notifyPointerUp();
+    await vi.waitFor(() =>
+      expect(setAlignment).toHaveBeenCalledWith({
+        target: { kind: 'block', nodeType: 'paragraph', nodeId: 'P2' },
+        alignment: 'center',
+      }),
+    );
+    ui.destroy();
+  });
+
+  it('SD-5426 copy-format leaves paragraph formatting unchanged for a partial source selection', async () => {
     const { superdoc, apply, setAlignment, setSelection, targetSelection } = makeFormatPainterSuperdoc({
       sourceRange: { start: 0, end: 4 },
       sourceParagraphProps: { alignment: 'center' },
@@ -4769,13 +4843,107 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledTimes(1);
-    await vi.waitFor(() => {
-      expect(setAlignment).toHaveBeenCalledWith({
-        target: { kind: 'block', nodeType: 'paragraph', nodeId: 'P2' },
-        alignment: 'center',
-      });
+    await vi.waitFor(() => expect(ui.commands.get('copy-format').getState().active).toBe(false));
+    expect(setAlignment).not.toHaveBeenCalled();
+  });
+
+  it('SD-5426 copy-format clears target-only direct properties from a uniformly plain source', async () => {
+    const { superdoc, apply, setSelection, targetSelection } = makeFormatPainterSuperdoc({
+      sourceRuns: [{ text: 'hello' }],
+      targetRuns: [
+        {
+          text: 'world',
+          props: { bold: true, italic: true, underline: { style: 'single' }, color: '#D2003F', highlight: '#FFFF00' },
+        },
+      ],
     });
+    const ui = createSuperDocUI({ superdoc });
+    expect(await ui.commands.executeAsync('copy-format')).toBe(true);
+    setSelection(targetSelection);
+    ui.formatPainter.notifyPointerUp();
+    await vi.waitFor(() =>
+      expect(apply).toHaveBeenCalledWith(
+        {
+          target: targetSelection.selectionTarget,
+          inline: { bold: false, italic: false, underline: false, color: null, highlight: null },
+        },
+        { offsetSpace: 'selection' },
+      ),
+    );
+  });
+
+  it.each([
+    { state: 'uniform', value: 'none', expected: 'none' },
+    { state: 'uniform', value: '#FF0000', expected: '#FF0000' },
+    { state: 'mixed', value: undefined, expected: undefined },
+    { state: 'unresolvable', value: undefined, expected: undefined },
+  ])(
+    'SD-5426 copy-format uses effective highlight $state/$value when getNode omits run props',
+    async ({ state, value, expected }) => {
+      const readEffectiveInlineUniformity = vi.fn(() => ({
+        success: true,
+        values: { bold: { state: 'uniform', value: 'false' }, highlight: { state, value } },
+      }));
+      const { superdoc, apply, setSelection, targetSelection } = makeFormatPainterSuperdoc({
+        sourceRuns: [{ text: 'hello' }],
+        targetRuns: [{ text: 'world' }],
+        readEffectiveInlineUniformity,
+      });
+      const ui = createSuperDocUI({ superdoc });
+      expect(await ui.commands.executeAsync('copy-format')).toBe(true);
+      setSelection(targetSelection);
+      ui.formatPainter.notifyPointerUp();
+      await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+      const inline = apply.mock.calls[0][0].inline;
+      expect(inline.bold).toBe(false);
+      if (expected === undefined) expect(inline).not.toHaveProperty('highlight');
+      else expect(inline.highlight).toBe(expected);
+    },
+  );
+
+  it('SD-5426 copy-format writes explicit OFF for uniformly inactive inherited source marks', async () => {
+    const { superdoc, apply, setSelection, targetSelection } = makeFormatPainterSuperdoc({
+      sourceRuns: [{ text: 'hello' }],
+      readEffectiveInlineUniformity: () => ({ success: true, values: { bold: { state: 'uniform', value: 'false' } } }),
+    });
+    const ui = createSuperDocUI({ superdoc });
+    expect(await ui.commands.executeAsync('copy-format')).toBe(true);
+    setSelection(targetSelection);
+    ui.formatPainter.notifyPointerUp();
+    await vi.waitFor(() =>
+      expect(apply).toHaveBeenCalledWith(
+        {
+          target: targetSelection.selectionTarget,
+          inline: { bold: false },
+        },
+        { offsetSpace: 'selection' },
+      ),
+    );
+  });
+
+  it('SD-5426 copy-format does not reset mixed source color while clearing uniformly absent italic', async () => {
+    const { superdoc, apply, setSelection, targetSelection } = makeFormatPainterSuperdoc({
+      sourceRuns: [
+        { text: 'he', props: { bold: true, color: '#D2003F' } },
+        { text: 'llo', props: { bold: true, color: '#00FF00' } },
+      ],
+      targetRuns: [{ text: 'world', props: { italic: true, color: '#0000FF' } }],
+    });
+    const ui = createSuperDocUI({ superdoc });
+    expect(await ui.commands.executeAsync('copy-format')).toBe(true);
+    setSelection(targetSelection);
+    ui.formatPainter.notifyPointerUp();
+    await vi.waitFor(() =>
+      expect(apply).toHaveBeenCalledWith(
+        {
+          target: targetSelection.selectionTarget,
+          inline: { bold: true, italic: false },
+        },
+        { offsetSpace: 'selection' },
+      ),
+    );
   });
 
   it('copy-format still applies paragraph formatting when the destination lacks an inline selection target', async () => {
@@ -4888,6 +5056,7 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
 
     // Inline props from the run at caret offset are applied to the text target
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledWith(expect.objectContaining({ inline: expect.objectContaining({ bold: true }) }), {
       offsetSpace: 'selection',
     });
@@ -4940,6 +5109,7 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => {
       expect(setAlignment).toHaveBeenCalledWith({
@@ -4965,6 +5135,7 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledWith(
       {
@@ -5008,6 +5179,7 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledWith(
       {
@@ -5123,6 +5295,7 @@ describe('public ui — command reason taxonomy', () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledWith(
       {
