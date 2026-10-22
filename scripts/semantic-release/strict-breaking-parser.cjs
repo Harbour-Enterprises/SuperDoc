@@ -7,7 +7,7 @@ function mergeStrictParserOpts(options = {}) {
   return {
     ...options,
     parserOpts: {
-      ...(options.parserOpts || {}),
+      ...options.parserOpts,
       ...strictBreakingParserOpts,
     },
   };

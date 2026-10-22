@@ -292,7 +292,7 @@ const buildMirrorTarball = ({
   // the canonical platform family, or every native binary has to be published
   // twice for as long as the mirror exists.
   manifest.name = mirrorName;
-  manifest.publishConfig = { ...(manifest.publishConfig || {}), access: 'public' };
+  manifest.publishConfig = { ...manifest.publishConfig, access: 'public' };
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
   logger.log(`Packing mirror ${mirrorName}...`);

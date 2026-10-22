@@ -252,7 +252,7 @@ const ROUTER_RECEIVERS = new Set(['app', 'router', 'server', 'api', 'fastify', '
  * `file:///home/alice/x.docx` is a machine path whatever receives it.
  */
 function isFileUrl(text, offset) {
-  return /file:\/\/$/.test(text.slice(Math.max(0, offset - 8), offset));
+  return text.slice(Math.max(0, offset - 8), offset).endsWith('file://');
 }
 
 /**

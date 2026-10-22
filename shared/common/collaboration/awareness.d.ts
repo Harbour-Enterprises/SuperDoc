@@ -38,4 +38,3 @@ export declare const awarenessStatesToArray: (
  * @returns Shuffled array of hex colors
  */
 export declare const shuffleArray: (array: HexColor[]) => HexColor[];
-export {};

@@ -76,7 +76,20 @@ export default defineConfig({
     rules: {
       'no-unused-vars': 'error',
       'no-unused-private-class-members': 'error',
+      // Every hit was intentional: preallocated arrays in layout hot paths,
+      // sanitizers that match control characters, and `[...listeners]`
+      // snapshots that keep listeners added mid-notify from running.
+      'unicorn/no-new-array': 'off',
+      'no-control-regex': 'off',
+      'unicorn/no-useless-spread': 'off',
     },
+    overrides: [
+      {
+        // JSON Schema `if`/`then` keywords, not promise-like objects.
+        files: ['packages/document-api/src/contract/schemas.ts'],
+        rules: { 'unicorn/no-thenable': 'off' },
+      },
+    ],
     ignorePatterns: [
       // The old root lint script excluded Vue SFCs and Oxlint would lint them;
       // bringing them into scope is a separate decision, not a side effect of

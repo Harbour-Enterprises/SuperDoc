@@ -823,11 +823,11 @@ function isPrivateHost(hostname) {
   if (host === 'localhost' || host === '::1' || host.endsWith('.local') || host.endsWith('.internal')) return true;
   if (!host.includes('.') && !host.includes(':')) return true;
   return (
-    /^127\./.test(host) ||
-    /^10\./.test(host) ||
-    /^192\.168\./.test(host) ||
+    host.startsWith('127.') ||
+    host.startsWith('10.') ||
+    host.startsWith('192.168.') ||
     /^172\.(?:1[6-9]|2\d|3[01])\./.test(host) ||
-    /^169\.254\./.test(host) ||
+    host.startsWith('169.254.') ||
     host === '0.0.0.0'
   );
 }

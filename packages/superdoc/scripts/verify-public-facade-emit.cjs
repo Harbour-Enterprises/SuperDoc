@@ -387,7 +387,7 @@ function stripComments(source) {
 const LEAK_PATTERNS = [
   { name: 'private workspace specifier', re: /(?:from\s+['"]|require\(['"])@superdoc\//g },
   { name: 'pnpm internal path', re: /\.pnpm\//g },
-  { name: 'absolute source path', re: /['"][\/\\][^'"\n]*\/(packages|node_modules)\//g },
+  { name: 'absolute source path', re: /['"][/\\][^'"\n]*\/(packages|node_modules)\//g },
 ];
 
 function checkLeaks(entry) {

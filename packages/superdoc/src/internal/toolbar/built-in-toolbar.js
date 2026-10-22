@@ -549,7 +549,8 @@ export class BuiltInToolbar extends EventEmitter {
       if (overflowTrigger) {
         const triggerOriginalIndex = originalIndex.get(overflowTrigger);
         const insertAt = reordered.findIndex((item) => originalIndex.get(item) > triggerOriginalIndex);
-        insertAt === -1 ? reordered.push(overflowTrigger) : reordered.splice(insertAt, 0, overflowTrigger);
+        if (insertAt === -1) reordered.push(overflowTrigger);
+        else reordered.splice(insertAt, 0, overflowTrigger);
       }
       filteredItems.splice(0, filteredItems.length, ...reordered);
 

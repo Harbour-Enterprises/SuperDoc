@@ -248,10 +248,10 @@ export class WorkflowRecorder {
     private readonly root: HTMLElement,
     private readonly version: () => string,
   ) {
-    const recorder = this;
+    const isActive = () => this.active;
     this.api = Object.freeze({
       get active() {
-        return recorder.active;
+        return isActive();
       },
       start: (options?: WorkflowRecordingOptions) => this.start(options),
       stop: () => this.stop(),
