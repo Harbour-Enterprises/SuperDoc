@@ -12,14 +12,30 @@
  */
 
 import { isPlainObject } from '../../helpers/object-guards.js';
+import type {
+  CommentInteractionConfig,
+  CommentInteractionLevel,
+  Config,
+  InteractionConfig,
+  Modules,
+  TrackChangesInteractionConfig,
+} from '../types/index.js';
 
-/** @typedef {'read' | 'write' | 'resolve'} CommentInteractionLevel */
+type InteractionSource = Pick<Config, 'interaction' | 'modules'>;
 
-/**
- * @param {unknown} value
- * @returns {value is CommentInteractionLevel}
- */
-const isCommentInteractionLevel = (value) => value === 'read' || value === 'write' || value === 'resolve';
+type LegacyCommentsConfig = Exclude<Modules['comments'], false | undefined>;
+
+type NormalizedInteractionConfig = {
+  comments: {
+    level: CommentInteractionLevel;
+    readOnly: boolean;
+    allowResolve: boolean;
+  };
+  trackedChanges: { allowDecisions: boolean };
+};
+
+const isCommentInteractionLevel = (value: unknown): value is CommentInteractionLevel =>
+  value === 'read' || value === 'write' || value === 'resolve';
 
 /**
  * Resolve the effective interaction policy.
@@ -28,37 +44,24 @@ const isCommentInteractionLevel = (value) => value === 'read' || value === 'writ
  * Deprecated `readOnly` keeps its historical effect on both comment writes
  * and tracked-change decisions. Deprecated `allowResolve` affects only
  * resolve and reopen actions.
- *
- * @param {Record<string, any>} [config] Raw consumer config.
- * @returns {{
- *   comments: {
- *     level: CommentInteractionLevel,
- *     readOnly: boolean,
- *     allowResolve: boolean,
- *   },
- *   trackedChanges: { allowDecisions: boolean },
- * }}
  */
-export function normalizeInteractionConfig(config = {}) {
-  const interaction = isPlainObject(config.interaction) ? config.interaction : {};
-  const interactionComments = isPlainObject(interaction.comments) ? interaction.comments : {};
-  const interactionTrackedChanges = isPlainObject(interaction.trackedChanges) ? interaction.trackedChanges : {};
+export function normalizeInteractionConfig(config: InteractionSource = {}): NormalizedInteractionConfig {
+  const interaction: InteractionConfig = isPlainObject(config.interaction) ? config.interaction : {};
+  const interactionComments: CommentInteractionConfig = isPlainObject(interaction.comments) ? interaction.comments : {};
+  const interactionTrackedChanges: TrackChangesInteractionConfig = isPlainObject(interaction.trackedChanges)
+    ? interaction.trackedChanges
+    : {};
 
   // `modules.comments` is `false | object | undefined`. `false` disables the
   // built-in UI, which says nothing about policy, so it contributes no
   // legacy values rather than reading as "everything permitted".
-  const legacyComments = isPlainObject(config.modules?.comments) ? config.modules.comments : {};
+  const legacyComments: LegacyCommentsConfig = isPlainObject(config.modules?.comments) ? config.modules.comments : {};
 
   const legacyReadOnly = (interactionComments.readOnly ?? legacyComments.readOnly ?? false) === true;
   const legacyAllowResolve = (interactionComments.allowResolve ?? legacyComments.allowResolve ?? true) !== false;
-  const hasCanonicalLevel = isCommentInteractionLevel(interactionComments.level);
-  const level = hasCanonicalLevel
-    ? interactionComments.level
-    : legacyReadOnly
-      ? 'read'
-      : legacyAllowResolve
-        ? 'resolve'
-        : 'write';
+  const canonicalLevel = interactionComments.level;
+  const hasCanonicalLevel = isCommentInteractionLevel(canonicalLevel);
+  const level = hasCanonicalLevel ? canonicalLevel : legacyReadOnly ? 'read' : legacyAllowResolve ? 'resolve' : 'write';
 
   const canonicalAllowDecisions = interactionTrackedChanges.allowDecisions;
 
