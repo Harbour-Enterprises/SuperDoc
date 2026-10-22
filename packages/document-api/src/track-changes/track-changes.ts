@@ -361,7 +361,7 @@ function normalizeReviewDecideTarget(target: Record<string, unknown>): ReviewDec
       );
     }
     const story = readOptionalStory(target, 'target.story', false);
-    const side = readOptionalReplacementReviewDecideTargetSide(target, 'target.side');
+    const side = readOptionalReplacementReviewDecideTargetSide(target);
     const moveRole = readOptionalMoveRole(target);
     return {
       kind: 'id',
@@ -487,7 +487,7 @@ function normalizeReviewDecideTarget(target: Record<string, unknown>): ReviewDec
     }
     if (typeof target.id === 'string' && target.id.length > 0) {
       const story = readOptionalStory(target, 'target.story', false);
-      const side = readOptionalReplacementReviewDecideTargetSide(target, 'target.side');
+      const side = readOptionalReplacementReviewDecideTargetSide(target);
       const moveRole = readOptionalMoveRole(target);
       return {
         kind: 'id',
@@ -708,7 +708,6 @@ function readOptionalMoveRole(target: Record<string, unknown>): ReviewDecideTarg
 }
 function readOptionalReplacementReviewDecideTargetSide(
   target: Record<string, unknown>,
-  field: string,
 ): 'insert' | 'inserted' | 'delete' | 'deleted' | undefined {
   if (!('side' in target) || target.side === undefined || target.side === null) return undefined;
   validateReplacementTargetSide(target.side);

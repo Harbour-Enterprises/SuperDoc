@@ -10,7 +10,7 @@ import '../style.css';
 import { EventEmitter } from 'eventemitter3';
 import type { DocumentReplacementResult } from '../public/document-replacement.js';
 import { v4 as uuidv4 } from 'uuid';
-import { markRaw, nextTick, toRaw } from 'vue';
+import { nextTick, toRaw } from 'vue';
 import type { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 import type { ContentControlType } from '@superdoc/document-api';
 import JSZip from 'jszip';
@@ -22,7 +22,6 @@ import { computeAppliedFitZoom, resolveFitWidthOptions } from '../composables/us
 import { createSuperdocVueApp } from './create-app.js';
 import { createDownload, cleanName } from './helpers/export.js';
 import { initCollaborationComments } from './collaboration/helpers.js';
-import { setupAwarenessHandler } from './collaboration/collaboration.js';
 import {
   resolveV2CollaborationTarget,
   type LegacyCollaborationLike,
@@ -142,8 +141,6 @@ type ToolbarLike = {
   destroy: () => void;
 };
 
-type ProviderEventHandler = (...args: unknown[]) => void;
-
 type TrackedChangesRenderMode = 'review' | 'original' | 'final' | 'off';
 
 const VIEWING_TRACKED_CHANGES_MODES: readonly ViewingTrackedChangesMode[] = ['original', 'markup', 'final'];
@@ -195,75 +192,6 @@ async function createZip(blobs: Blob[], fileNames: string[]): Promise<Blob> {
     zip.file(fileNames[index], blob);
   });
   return zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-}
-
-function isCollaborationProviderSynced(provider: CollaborationProvider | null | undefined): boolean {
-  return Boolean(provider && (provider.synced === true || provider.isSynced === true));
-}
-
-function markProviderSynced(provider: CollaborationProvider): void {
-  try {
-    provider.synced = true;
-  } catch {
-    // Some providers expose readonly getters.
-  }
-  try {
-    provider.isSynced = true;
-  } catch {
-    // Some providers expose readonly getters.
-  }
-}
-
-function onCollaborationProviderSynced(
-  provider: CollaborationProvider | null | undefined,
-  onSynced: () => void,
-): () => void {
-  if (!provider) return () => {};
-
-  if (isCollaborationProviderSynced(provider)) {
-    onSynced();
-    return () => {};
-  }
-
-  const on = typeof provider.on === 'function' ? provider.on.bind(provider) : null;
-  const off = typeof provider.off === 'function' ? provider.off.bind(provider) : null;
-  if (!on) {
-    onSynced();
-    return () => {};
-  }
-
-  let settled = false;
-  const cleanup = () => {
-    if (settled) return;
-    settled = true;
-    off?.('synced', handleSynced as ProviderEventHandler);
-    off?.('sync', handleSync as ProviderEventHandler);
-  };
-  const finish = () => {
-    if (settled) return;
-    cleanup();
-    onSynced();
-  };
-  const handleSynced = () => {
-    markProviderSynced(provider);
-    finish();
-  };
-  const handleSync = (synced?: unknown) => {
-    if (synced === false) return;
-    if (synced === true || isCollaborationProviderSynced(provider)) {
-      markProviderSynced(provider);
-      finish();
-    }
-  };
-
-  on('synced', handleSynced as ProviderEventHandler);
-  on('sync', handleSync as ProviderEventHandler);
-
-  if (isCollaborationProviderSynced(provider)) {
-    finish();
-  }
-
-  return cleanup;
 }
 
 // TS-native type imports for the types this file annotates against.
@@ -914,8 +842,8 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
    * so these fields are `undefined` between `new SuperDoc(config)`
    * returning and the `ready` event firing. Typed as `T | undefined` so
    * @ts-check forces every access path to either narrow or use the
-   * `#requireSuperdocStore` / `#requireCommentsStore` helpers below
-   * (which throw a clear "wait for ready" error). SD-2916 PR-B closed
+   * `#requireSuperdocStore` helper below
+   * (which throws a clear "wait for ready" error). SD-2916 PR-B closed
    * the delayed-init soundness gap.
    *
    * `@private` is a TypeScript-surface hide, not runtime privacy: the
@@ -1011,7 +939,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   declare comments: unknown[];
   declare socket: HocuspocusProviderWebsocket | null;
   declare user: AwarenessUser;
-  declare _cleanupAwareness: (() => void) | null;
   declare _commentsCollabInitialized: boolean;
 
   /**
@@ -1413,7 +1340,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
 
     this.whiteboard = new Whiteboard({
       Renderer: WhiteboardRenderer,
-      superdoc: this,
       enabled,
     });
     this.emit('whiteboard:init', { whiteboard: this.whiteboard });
@@ -1900,63 +1826,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   // Collaboration attachment / detachment
   // ---------------------------------------------------------------------------
 
-  /**
-   * Attach an external ydoc/provider pair to this instance and all documents.
-   *
-   * Shared by constructor-time initialization and late upgrade.
-   * Does NOT initialize collaboration comments — that happens in `#initVueApp()`
-   * or explicitly after this call during construction.
-   *
-   */
-  #attachExternalCollaboration(ydoc: Y.Doc, provider: CollaborationProvider) {
-    this.isCollaborative = true;
-
-    // Reset comments observer flag so a new observer is created for the new ydoc
-    this._commentsCollabInitialized = false;
-
-    // Mark as raw to prevent Vue's deep reactive traversal from hitting
-    // circular references inside Y.js internals (causes stack overflow).
-    this.ydoc = markRaw(ydoc);
-    this.provider = markRaw(provider);
-
-    this.#assignUserColor();
-    const internalConfig = this.config;
-    this._cleanupAwareness = setupAwarenessHandler(provider, this, internalConfig.user);
-
-    internalConfig.documents.forEach((doc: RuntimeDocument) => {
-      doc.ydoc = ydoc;
-      doc.provider = provider;
-      doc.role = this.config.role;
-    });
-  }
-
-  /**
-   * Undo `#attachExternalCollaboration()` so the instance can fall back
-   * to non-collaborative mode (used during best-effort rollback).
-   */
-  #detachCollaboration() {
-    this.#pendingV2LockSeed = null;
-    this.#stopV2CollaborationEventBridge();
-    // Remove the awareness listener so the discarded provider cannot emit
-    // awareness-update events into this SuperDoc instance after rollback.
-    if (typeof this._cleanupAwareness === 'function') {
-      this._cleanupAwareness();
-      this._cleanupAwareness = null;
-    }
-
-    this.isCollaborative = false;
-    this._commentsCollabInitialized = false;
-    this.ydoc = undefined;
-    this.provider = undefined;
-    const cfg = this.config;
-    delete cfg.modules.collaboration;
-
-    cfg.documents.forEach((doc: RuntimeDocument) => {
-      delete doc.ydoc;
-      delete doc.provider;
-    });
-  }
-
   #stopV2CollaborationEventBridge() {
     if (this.#v2AwarenessUnsub) {
       try {
@@ -2299,22 +2168,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   }
 
   /**
-   * Counterpart to `#requireSuperdocStore` for the comments store.
-   * Used by paths that read `commentsStore.commentsList` or other
-   * non-optional store members. Pre-ready safe paths (`getComment`,
-   * `setActiveComment`, etc.) keep their existing `?.` pattern.
-   *
-   */
-  #requireCommentsStore(methodName: string) {
-    if (!this.commentsStore) {
-      throw new Error(
-        `SuperDoc: ${methodName} requires the instance to be ready; wait for the "ready" event before calling.`,
-      );
-    }
-    return this.commentsStore;
-  }
-
-  /**
    * Lightweight readiness guard for fields whose only access is
    * mutation (e.g. `users` via `addSharedUser`/`removeSharedUser`).
    * The store fields are the most reliable "ready" proxy since they
@@ -2332,28 +2185,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   // ---------------------------------------------------------------------------
   // Late-upgrade helpers
   // ---------------------------------------------------------------------------
-
-  /**
-   * Set ydoc/provider on live store document composables.
-   * Each composable uses shallowRef for these fields (use-document.js:28-29),
-   * so we assign to `.value` directly. Vue's reactive proxy auto-unwraps
-   * shallowRefs on property access, so we must use `toRaw()` to reach the
-   * underlying ref objects.
-   *
-   */
-  #setStoreDocumentCollaboration(ydoc: Y.Doc | null, provider: CollaborationProvider | null) {
-    const storeDocs = this.superdocStore?.documents;
-    if (!Array.isArray(storeDocs)) return;
-    for (const doc of storeDocs) {
-      const raw = toRaw(doc);
-      if (raw.ydoc && typeof raw.ydoc === 'object' && 'value' in raw.ydoc) {
-        raw.ydoc.value = ydoc;
-      }
-      if (raw.provider && typeof raw.provider === 'object' && 'value' in raw.provider) {
-        raw.provider.value = provider;
-      }
-    }
-  }
 
   #readStoreDocV2Collaboration(rawStoreDoc: RuntimeDocument | null): RuntimeDocument['v2Collaboration'] | null {
     if (!rawStoreDoc) return null;
@@ -2501,149 +2332,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
       storeDoc.fieldContext = {};
       if (nextV2Collaboration) this.#writeStoreDocV2Collaboration(storeDoc, nextV2Collaboration);
     }
-  }
-
-  /**
-   * Resolve the editor instance that supports `attachCollaboration`.
-   * Prefers DocumentRendererRuntime (has cursor/layout support); falls back to raw Editor.
-   *
-   */
-  #resolveUpgradeTarget() {
-    const storeDocs = this.superdocStore?.documents;
-    if (!storeDocs?.length) {
-      throw new Error('SuperDoc: no store documents available for upgrade');
-    }
-    const target = storeDocs[0].getDocumentRuntime?.() || storeDocs[0].getEditor?.();
-    if (!target?.attachCollaboration) {
-      throw new Error('SuperDoc: editor does not support attachCollaboration');
-    }
-    return target;
-  }
-
-  /**
-   * Undo config/store/awareness mutations if `editor.attachCollaboration()` fails.
-   * The editor itself is still in local mode (the throw happened before or during
-   * reconfigure), so we only need to undo the SuperDoc-layer changes.
-   */
-  #rollbackCollaborationAttach() {
-    this.#detachCollaboration();
-    this.#setStoreDocumentCollaboration(null, null);
-  }
-
-  /**
-   * Wait for the backing editor to emit `collaborationReady` after a live
-   * attach. Resolves immediately if the editor has already fired the event.
-   *
-   * This wait is **non-fatal**: if it times out or is aborted by `destroy()`,
-   * the promise still resolves (not rejects). The attach already succeeded,
-   * so the editor IS collaborative. A timeout only means secondary setup
-   * (cursors, presence) is delayed — rolling back would be worse.
-   *
-   */
-  #waitForCollaborationReady(editorInstance: Editor | DocumentRendererRuntime) {
-    const TIMEOUT_MS = 10_000;
-
-    // DocumentRendererRuntime wraps Editor; get the underlying editor for event
-    // listening. DocumentRendererRuntime exposes a `get editor(): Editor`
-    // accessor; plain Editor has no such property, so the runtime `??`
-    // fallback returns the instance itself in that case. The structural
-    // `{ editor? }` cast names the lookup without claiming the field
-    // exists on the Editor arm of the union.
-    const editor = ((editorInstance as { editor?: Editor }).editor ?? editorInstance) as Editor;
-
-    // If collaborationReady already fired (options flag set by collaboration extension)
-    if (editor.options?.collaborationIsReady) {
-      return Promise.resolve();
-    }
-
-    return new Promise<void>((resolve) => {
-      let settled = false;
-
-      const cleanup = () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        if (typeof editor.off === 'function') editor.off('collaborationReady', onReady);
-      };
-
-      const timer = setTimeout(() => {
-        cleanup();
-        console.warn(
-          '[SuperDoc] collaborationReady did not fire within 10 s after collaboration attach. Continuing — collaboration is active but cursor/presence setup may be delayed.',
-        );
-        resolve(undefined);
-      }, TIMEOUT_MS);
-
-      const onReady = () => {
-        cleanup();
-        resolve(undefined);
-      };
-
-      // Allow destroy() to abort this wait immediately.
-      this.#abortUpgrade = () => {
-        cleanup();
-        resolve(undefined);
-      };
-
-      if (typeof editor.on === 'function') {
-        editor.on('collaborationReady', onReady);
-      } else {
-        cleanup();
-        resolve(undefined);
-      }
-    });
-  }
-
-  /**
-   * Wait for the provider to report synced, with a timeout.
-   *
-   * Mirrors the timeout + cleanup pattern from Editor.replaceFile() so a
-   * provider that exposes on/off but never emits sync cannot hang forever.
-   * destroy() can abort this wait early via #abortUpgrade.
-   *
-   */
-  #waitForProviderSync(provider: CollaborationProvider) {
-    const SYNC_TIMEOUT_MS = 10_000;
-
-    return new Promise<void>((resolve, reject) => {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      let settled = false;
-      // Initial no-op; reassigned below to the real cleanup once the
-      // sync observer is registered.
-      // oxlint-disable-next-line @typescript-eslint/no-empty-function
-      let syncCleanup = () => {};
-
-      const settle = () => {
-        settled = true;
-        clearTimeout(timer);
-        syncCleanup();
-      };
-
-      syncCleanup = onCollaborationProviderSynced(provider, () => {
-        if (settled) return;
-        settle();
-        resolve();
-      });
-
-      if (!settled) {
-        timer = setTimeout(() => {
-          settle();
-          reject(
-            new Error(
-              `SuperDoc: collaboration provider did not sync within ${SYNC_TIMEOUT_MS} ms. ` +
-                `The provider exposes on/off but never emitted sync(true) or synced.`,
-            ),
-          );
-        }, SYNC_TIMEOUT_MS);
-      }
-
-      // Allow destroy() to abort the sync wait immediately
-      this.#abortUpgrade = () => {
-        if (settled) return;
-        settle();
-        reject(new Error('SuperDoc: instance was destroyed during upgrade'));
-      };
-    });
   }
 
   /**
@@ -4472,12 +4160,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   #cleanupCollaboration() {
     this.#pendingV2LockSeed = null;
     this.#stopV2CollaborationEventBridge();
-    // Remove the awareness listener so the provider cannot emit events
-    // into a destroyed SuperDoc instance.
-    if (typeof this._cleanupAwareness === 'function') {
-      this._cleanupAwareness();
-      this._cleanupAwareness = null;
-    }
 
     const cfg = this.config;
     // `cancelWebsocketRetry` is set on `HocuspocusProviderWebsocket` only

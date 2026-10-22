@@ -201,7 +201,7 @@ export function calculateBalancedColumnHeight(
   while (lo <= hi) {
     iterations++;
     const mid = Math.floor((lo + hi) / 2);
-    const sim = simulateBalancedLayout(ctx, mid, config);
+    const sim = simulateBalancedLayout(ctx, mid);
     const maxCol = Math.max(...sim.columnHeights);
     const placed = sim.assignments.size === ctx.contentBlocks.length;
     if (placed && maxCol <= mid) {
@@ -233,11 +233,7 @@ export function calculateBalancedColumnHeight(
  * Simulate layout with given target column height.
  * Does NOT mutate actual layout state.
  */
-function simulateBalancedLayout(
-  ctx: BalancingContext,
-  targetHeight: number,
-  config: ColumnBalancingConfig,
-): SimulationResult {
+function simulateBalancedLayout(ctx: BalancingContext, targetHeight: number): SimulationResult {
   const assignments = new Map<string, number>();
   const breakPoints = new Map<string, BlockBreakPoint>();
   const columnHeights: number[] = new Array(ctx.columnCount).fill(0);

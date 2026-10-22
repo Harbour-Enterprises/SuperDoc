@@ -65,7 +65,6 @@ import { WhiteboardPage } from './WhiteboardPage';
  *
  * @typedef {{
  *  Renderer?: any,
- *  superdoc?: any,
  *  enabled?: boolean,
  *  onChange?: (data: WhiteboardData) => void,
  *  onSetData?: (pages: WhiteboardPage[]) => void,
@@ -80,8 +79,6 @@ import { WhiteboardPage } from './WhiteboardPage';
  */
 export class Whiteboard extends EventEmitter {
   #Renderer = null;
-
-  #superdoc = null;
 
   #pages = new Map();
 
@@ -114,7 +111,6 @@ export class Whiteboard extends EventEmitter {
    */
   #init(props) {
     this.#Renderer = props.Renderer;
-    this.#superdoc = props.superdoc;
     this.#enabled = props.enabled;
 
     this.#onChange = props.onChange;

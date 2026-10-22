@@ -3159,8 +3159,6 @@ async function measureParagraphBlock(
 
       // Initialize line if needed
       if (!currentLine) {
-        const imageRunFontSize =
-          typeof run.fontSize === 'number' && run.fontSize > 0 ? normalizeFontSize(run.fontSize) : undefined;
         currentLine = {
           fromRun: runIndex,
           fromChar: 0,

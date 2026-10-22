@@ -66,7 +66,7 @@ const PUBLIC_SRC = path.resolve(__dirname, '..', 'src', 'public');
 let ts;
 try {
   ts = require('typescript');
-} catch (err) {
+} catch {
   console.error('[verify-public-facade-emit] typescript is not available in this package.');
   process.exit(1);
 }
@@ -376,7 +376,7 @@ function checkCommandSignatureProbe(entry) {
   } finally {
     try {
       fs.unlinkSync(probePath);
-    } catch (_) {}
+    } catch {}
   }
 }
 

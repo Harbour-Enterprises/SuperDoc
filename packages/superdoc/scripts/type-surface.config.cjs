@@ -15,8 +15,6 @@
  *
  * Shape:
  *   - `requiredEntryPoints`: dist d.ts paths that must exist after build.
- *   - `handwrittenDtsBlocklist`: filenames in source that must NOT be
- *     copied into dist (internal-only ambient declarations).
  *   - `relocations`: workspace packages whose types appear on the public
  *     surface. Each entry pairs the rewriter rule with the source paths
  *     vite-plugin-dts and tsconfig.json need to include for the
@@ -76,13 +74,6 @@ const requiredEntryPoints = [
  * `relocations[*].tsconfigIncludes`.
  */
 const baseTsconfigIncludes = ['src', '../document-api/src'];
-
-const handwrittenDtsBlocklist = [
-  // Ambient module declarations for internal converter subpaths. Nothing in
-  // superdoc@2's shipped surface imports those subpaths, so the declarations
-  // would only leak the bare specifiers into published d.ts.
-  'converter-internal.d.ts',
-];
 
 /**
  * Each relocation describes a private workspace package whose types appear
@@ -322,7 +313,6 @@ const publicContract = {
 
 module.exports = {
   requiredEntryPoints,
-  handwrittenDtsBlocklist,
   baseTsconfigIncludes,
   relocations,
   sharedCommonDtsTargets,

@@ -516,7 +516,6 @@ export function resolveHeaderFooterForPageAndSection(
   }
   const firstPageInSection = sectionFirstPageNumbers.get(sectionIndex);
   const sectionPageNumber = typeof firstPageInSection === 'number' ? pageNumber - firstPageInSection + 1 : pageNumber;
-  const parityPageNumber = options?.parityPageNumber ?? page.displayNumber ?? pageNumber;
 
   const sectionTitlePg = getSectionTitlePg(identifier, sectionIndex);
   const type = selectHeaderFooterVariantForPage({

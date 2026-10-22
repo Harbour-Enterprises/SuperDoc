@@ -1055,8 +1055,6 @@ export function selectionToRects(
                   return;
                 }
 
-                const charOffsetFrom = pmPosToCharOffset(info.block, line, sliceFrom);
-                const charOffsetTo = pmPosToCharOffset(info.block, line, sliceTo);
                 const visualCharOffsetFrom = pmPosToVisualCharOffset(info.block, line, sliceFrom);
                 const visualCharOffsetTo = pmPosToVisualCharOffset(info.block, line, sliceTo);
                 const availableWidth = Math.max(1, cellMeasure.width - padding.left - padding.right);

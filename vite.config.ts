@@ -73,6 +73,10 @@ export default defineConfig({
   // or hold test code. Unlike Oxfmt above, which reads .gitignore, `vp lint`
   // only honors this list, so dist output must be repeated here.
   lint: {
+    rules: {
+      'no-unused-vars': 'error',
+      'no-unused-private-class-members': 'error',
+    },
     ignorePatterns: [
       // The old root lint script excluded Vue SFCs and Oxlint would lint them;
       // bringing them into scope is a separate decision, not a side effect of

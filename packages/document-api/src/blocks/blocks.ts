@@ -291,7 +291,7 @@ export function executeBlocksList(adapter: BlocksAdapter, input?: BlocksListInpu
         continue;
       const index = result.total++;
       if (index >= offset && result.blocks.length < limit) {
-        const { text: fullText, ...summary } = block;
+        const { text: _text, ...summary } = block;
         result.blocks.push(normalized!.includeText ? block : summary);
       }
     }

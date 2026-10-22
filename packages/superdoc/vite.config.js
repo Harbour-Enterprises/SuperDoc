@@ -223,7 +223,6 @@ export default defineConfig(({ mode, command }) => {
       ],
       hook: 'writeBundle'
     }),
-    // visualizer(visualizerConfig)
     {
       // Serve dist/ as static files so the docs dev server can load the local UMD build - Development only.
       name: 'serve-dist-for-docs',

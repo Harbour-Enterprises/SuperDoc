@@ -389,11 +389,6 @@ const RELOCATION_RULES = typeSurface.relocations.map(({ pkg, distEntry, matchSub
   matchSubpaths,
 }));
 
-// Guard packages that must never appear as a `declare module` block in
-// `_internal-shims.d.ts`. SD-2942 removed the shim emit; this list is
-// kept as defense against stale tarballs and future re-introduction.
-const RELOCATION_GUARD_PACKAGES = typeSurface.relocationGuardPackages;
-
 function isRelocatedSpecifier(mod) {
   return RELOCATION_RULES.some((rule) =>
     rule.matchSubpaths

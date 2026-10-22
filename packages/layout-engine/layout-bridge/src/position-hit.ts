@@ -1121,7 +1121,7 @@ export function clickToPositionGeometry(
         pageRelativePoint,
       );
       if (textboxHit) {
-        const { contentBlock, contentMeasure, localX, localY, pageIndex, paragraphIndex } = textboxHit;
+        const { contentBlock, contentMeasure, localX, localY, pageIndex } = textboxHit;
 
         const lineIndex = findLineIndexAtY(contentMeasure.lines, localY, 0, contentMeasure.lines.length);
         if (lineIndex != null) {
