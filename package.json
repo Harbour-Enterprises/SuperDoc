@@ -31,7 +31,7 @@
     "publish": "node scripts/publish-superdoc.cjs",
     "format": "vp fmt",
     "format:check": "pnpm run check:format-coverage && vp fmt --check",
-    "lint": "vp lint --deny-warnings packages shared scripts apps/cli apps/mcp apps/vscode-ext",
+    "lint": "vp lint packages shared scripts apps/cli apps/mcp apps/vscode-ext",
     "lint:fix": "vp lint --fix packages shared scripts apps/cli apps/mcp apps/vscode-ext",
     "pack": "pnpm run type-check && pnpm run pack:es",
     "release": "pnpm run type-check && pnpm --prefix packages/superdoc exec semantic-release",

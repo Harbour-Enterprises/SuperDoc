@@ -74,10 +74,9 @@ export default defineConfig({
   // only honors this list, so dist output must be repeated here.
   lint: {
     jsPlugins: [{ name: 'superdoc', specifier: './scripts/oxlint/superdoc-plugin.mjs' }],
+    categories: { correctness: 'error' },
     rules: {
       'superdoc/no-local-object-guard': 'error',
-      'no-unused-vars': 'error',
-      'no-unused-private-class-members': 'error',
       // Every hit was intentional: preallocated arrays in layout hot paths,
       // sanitizers that match control characters, and `[...listeners]`
       // snapshots that keep listeners added mid-notify from running.
