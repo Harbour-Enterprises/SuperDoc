@@ -4,13 +4,33 @@ export type FontLineMetricEnvelope = {
   glyphDescent: number;
   naturalAscent: number;
   naturalDescent: number;
+  naturalLineFamily?: string;
+  familyNaturalLineHeight?: number;
 };
 
 export type FontLineMetricSample = {
   ascent: number;
   descent: number;
   naturalLineHeight: number;
+  naturalLineFamily?: string;
 };
+
+function naturalHeightWithGlyphBounds(
+  height: number,
+  ascent: number,
+  descent: number,
+  naturalLineFamily?: string,
+): number {
+  const glyphHeight = ascent + descent;
+  // Full Chrome rounds Canvas ink bounds to whole pixels. That rounding
+  // must not add leading; retain genuinely taller or fractional ink bounds.
+  const roundedBoundsFit =
+    naturalLineFamily === 'times new roman' &&
+    Number.isInteger(ascent) &&
+    Number.isInteger(descent) &&
+    glyphHeight <= Math.ceil(height);
+  return roundedBoundsFit ? height : Math.max(glyphHeight, height);
+}
 
 /**
  * Add one font face to a line's shared baseline envelope.
@@ -28,13 +48,29 @@ export function extendFontLineMetricEnvelope(
   const glyphAscent = Math.max(0, sample.ascent);
   const glyphDescent = Math.max(0, sample.descent);
   const glyphHeight = glyphAscent + glyphDescent;
-  const naturalLineHeight = Math.max(glyphHeight, sample.naturalLineHeight);
+  const naturalLineHeight = naturalHeightWithGlyphBounds(
+    sample.naturalLineHeight,
+    glyphAscent,
+    glyphDescent,
+    sample.naturalLineFamily,
+  );
   const scale = glyphHeight > 0 ? naturalLineHeight / glyphHeight : 1;
   const naturalAscent = glyphAscent * scale;
   const naturalDescent = glyphDescent * scale;
 
   if (!current) {
-    return { glyphAscent, glyphDescent, naturalAscent, naturalDescent };
+    return {
+      glyphAscent,
+      glyphDescent,
+      naturalAscent,
+      naturalDescent,
+      ...(sample.naturalLineFamily
+        ? {
+            naturalLineFamily: sample.naturalLineFamily,
+            familyNaturalLineHeight: naturalLineHeight,
+          }
+        : {}),
+    };
   }
 
   return {
@@ -42,9 +78,22 @@ export function extendFontLineMetricEnvelope(
     glyphDescent: Math.max(current.glyphDescent, glyphDescent),
     naturalAscent: Math.max(current.naturalAscent, naturalAscent),
     naturalDescent: Math.max(current.naturalDescent, naturalDescent),
+    ...(current.naturalLineFamily && current.naturalLineFamily === sample.naturalLineFamily
+      ? {
+          naturalLineFamily: current.naturalLineFamily,
+          familyNaturalLineHeight: Math.max(current.familyNaturalLineHeight!, naturalLineHeight),
+        }
+      : {}),
   };
 }
 
 export function composedNaturalLineHeight(envelope: FontLineMetricEnvelope): number {
-  return envelope.naturalAscent + envelope.naturalDescent;
+  // Word's Times emphasis faces share one pitch. Composing their differing
+  // Canvas ascent/descent ratios would otherwise invent extra leading.
+  return naturalHeightWithGlyphBounds(
+    envelope.familyNaturalLineHeight ?? envelope.naturalAscent + envelope.naturalDescent,
+    envelope.glyphAscent,
+    envelope.glyphDescent,
+    envelope.naturalLineFamily,
+  );
 }

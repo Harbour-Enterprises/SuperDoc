@@ -40,6 +40,22 @@ describe('fontMetricsCache', () => {
     expect(getCalibratedNaturalSingleLine('Unknown Font', 16)).toBeUndefined();
   });
 
+  it('uses Word natural Times pitch through a physical font mapping without shrinking glyph metrics', () => {
+    const metrics = new FontMetricsMeasurementCache().get(
+      {
+        font: '',
+        measureText: () => ({ actualBoundingBoxAscent: 15, actualBoundingBoxDescent: 4 }),
+      } as unknown as CanvasRenderingContext2D,
+      { fontFamily: 'Physical Times Face', wordLineMetricFamily: 'Times New Roman, serif', fontSize: 16 },
+      'browser',
+      defaultFonts,
+    );
+
+    expect(metrics.naturalSingleLine).toBeCloseTo(18.4, 4);
+    expect(metrics.ascent).toBe(15);
+    expect(metrics.descent).toBe(4);
+  });
+
   it('uses the Word mutation-derived empty body-line calibration for Arial and its physical substitute', () => {
     expect(getCalibratedBodyEmptyLine('Arial, sans-serif', 16)).toBeCloseTo(18.4, 3);
     expect(getCalibratedBodyEmptyLine('Liberation Sans, sans-serif', 16)).toBeCloseTo(18.4, 3);

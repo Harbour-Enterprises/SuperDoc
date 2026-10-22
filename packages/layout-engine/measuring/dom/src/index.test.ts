@@ -734,6 +734,30 @@ describe('measureBlock', () => {
       expect(measure.totalHeight).toBeCloseTo(referenceMeasure.totalHeight, 3);
     });
 
+    it('preserves Word natural Times pitch for empty paragraphs through a physical mapping', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'empty-mapped-times',
+        runs: [{ text: '', fontFamily: 'Times New Roman', fontSize: 16 }],
+        attrs: { spacing: { line: 1, lineUnit: 'multiplier', lineRule: 'auto' } },
+      };
+      const fontContext = { resolvePhysical: () => 'Mapped Times Face', fontSignature: 'sd-5838-empty-times' };
+      const empty = expectParagraphMeasure(await measureBlock(block, 1000, fontContext));
+      const populated = expectParagraphMeasure(
+        await measureBlock(
+          {
+            ...block,
+            id: 'populated-mapped-times',
+            runs: [{ text: 'x', fontFamily: 'Times New Roman', fontSize: 16 }],
+          },
+          1000,
+          fontContext,
+        ),
+      );
+      expect(empty.lines[0].lineHeight).toBeCloseTo(18.4, 3);
+      expect(empty.lines[0].lineHeight).toBeCloseTo(populated.lines[0].lineHeight, 3);
+    });
+
     it('matches the Word mutation-derived Arial pitch for empty body paragraphs', async () => {
       const block: FlowBlock = {
         kind: 'paragraph',

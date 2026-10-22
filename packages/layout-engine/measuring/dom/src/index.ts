@@ -1231,11 +1231,17 @@ function calculateEmptyParagraphMetrics(
     fontInfo.fontFamily.trim().length > 0
   ) {
     const ctx = getCanvasContext(fontContext);
-    const metrics = measuredFontMetrics(ctx, {
-      ...fontInfo,
-      wordLineMetricFamily: undefined,
-      naturalLineMultiplier: undefined,
-    });
+    const runMetrics = measuredFontMetrics(ctx, fontInfo);
+    // Times paragraph marks share the populated line's Word-native pitch,
+    // including when its logical family maps to a physical substitute.
+    const metrics =
+      runMetrics.naturalLineFamily === 'times new roman'
+        ? runMetrics
+        : measuredFontMetrics(ctx, {
+            ...fontInfo,
+            wordLineMetricFamily: undefined,
+            naturalLineMultiplier: undefined,
+          });
     ascent = roundValue(metrics.ascent);
     descent = roundValue(metrics.descent);
     naturalSingleLine = metrics.naturalSingleLine;
@@ -1313,6 +1319,7 @@ function addFontInfoToLineMetricEnvelope(
     ascent: metrics.ascent,
     descent: metrics.descent,
     naturalLineHeight,
+    naturalLineFamily: metrics.naturalLineFamily,
   });
 }
 
