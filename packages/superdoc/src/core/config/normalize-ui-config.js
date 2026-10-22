@@ -29,7 +29,7 @@
  */
 
 import { firstDefined, mergeDefined } from './merge-defined.js';
-import { normalizeCommentsUiConfig } from '../../helpers/comment-small-screen.js';
+import { normalizeCommentsUiConfig } from '../../helpers/comment-small-screen.ts';
 import { TOOLBAR_ITEM_ALIASES } from '../../internal/toolbar/toolbar-item-aliases.js';
 import { isPlainObject } from '../../helpers/object-guards.js';
 
