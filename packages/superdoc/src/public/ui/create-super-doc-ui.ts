@@ -123,7 +123,7 @@ import { INLINE_PROPERTY_BY_KEY, isStoryLocator, type InlineRunPatchKey } from '
 // host members `unknown`; internally we read them defensively.
 // ---------------------------------------------------------------------------
 
-type AnyFn = (...args: any[]) => any;
+type AnyFn = (...args: unknown[]) => unknown;
 type LooseRecord = Record<string, any>;
 
 type FirstPartyCommandMutation = {
@@ -464,10 +464,10 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
 function resolveDocOperation(doc: LooseRecord | null, path: string): AnyFn | null {
   if (!doc) return null;
   const parts = path.split('.');
-  let cursor: any = doc;
+  let cursor: unknown = doc;
   for (const part of parts) {
-    if (cursor == null) return null;
-    cursor = cursor[part];
+    if (cursor === null || (typeof cursor !== 'object' && typeof cursor !== 'function')) return null;
+    cursor = Reflect.get(cursor, part);
   }
   return typeof cursor === 'function' ? (cursor as AnyFn) : null;
 }
@@ -11847,7 +11847,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       try {
         const catalog = await (controls.list as AnyFn).call(controls);
         if (cancelled()) return { success: false, reason: 'cancelled' };
-        const control = (catalog?.items as ContentControlInfo[] | undefined)?.find((item) => item.id === id);
+        const items = isPlainObject(catalog) ? (catalog.items as ContentControlInfo[] | undefined) : undefined;
+        const control = items?.find((item) => item.id === id);
         if (!control) return { success: false, reason: 'not-found' };
         const target = readSelectionTarget(control);
         if (!target || control.isEmpty) return { success: false, reason: 'not-reachable' };
