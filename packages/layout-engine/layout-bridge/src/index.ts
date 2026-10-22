@@ -3,8 +3,6 @@ import type {
   Layout,
   Measure,
   Fragment,
-  DrawingFragment,
-  ImageFragment,
   Run,
   Line,
   TableFragment,
@@ -309,12 +307,6 @@ import {
 
 export type Rect = { x: number; y: number; width: number; height: number; pageIndex: number };
 
-type AtomicFragment = DrawingFragment | ImageFragment;
-
-const logClickStage = (_level: 'log' | 'warn' | 'error', _stage: string, _payload: Record<string, unknown>) => {
-  // No-op in production. Enable for debugging click-to-position mapping.
-};
-
 const SELECTION_DEBUG_ENABLED = false;
 const logSelectionDebug = (payload: Record<string, unknown>): void => {
   if (!SELECTION_DEBUG_ENABLED) return;
@@ -331,19 +323,6 @@ const logSelectionDebug = (payload: Record<string, unknown>): void => {
  * WARNING: Should be false in production to avoid performance degradation.
  */
 const DEBUG_POSITION_MAPPING = false;
-
-/**
- * Logs position mapping debug information when DEBUG_POSITION_MAPPING is enabled.
- * @param payload - Debug data to log
- */
-const logPositionDebug = (payload: Record<string, unknown>): void => {
-  if (!DEBUG_POSITION_MAPPING) return;
-  try {
-    console.log('[CLICK-POS]', JSON.stringify(payload));
-  } catch {
-    console.log('[CLICK-POS]', payload);
-  }
-};
 
 /**
  * Logs selection mapping debug information when DEBUG_POSITION_MAPPING is enabled.

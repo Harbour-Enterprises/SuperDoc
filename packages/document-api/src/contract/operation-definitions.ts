@@ -580,7 +580,6 @@ export const INTENT_GROUP_META: Record<string, IntentGroupMeta> = {
 // ---------------------------------------------------------------------------
 const NONE_FAILURES: readonly ReceiptFailureCode[] = [];
 const NONE_THROWS: readonly PreApplyThrowCode[] = [];
-const INVALID_FRAGMENT_FAILURES: readonly ReceiptFailureCode[] = ['INVALID_FRAGMENT'];
 const FOOTNOTE_MUTATION_FAILURES: readonly ReceiptFailureCode[] = ['INVALID_FRAGMENT', 'CAPABILITY_UNAVAILABLE'];
 function readOperation(
   options: {

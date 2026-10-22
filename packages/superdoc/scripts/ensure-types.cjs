@@ -15,42 +15,6 @@ const typeSurface = require('./type-surface.config.cjs');
 const { npmDistRoot: distRoot } = require('./build-output-paths.cjs');
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
-// SD-2842: vite-plugin-dts skips hand-written `.d.ts` files in its include
-// glob (it only emits declarations from `.ts`/`.js`). When a file like
-// `core-command-map.d.ts` is referenced via a relative import from another
-// emitted `.d.ts`, the consumer hits an unresolved-module error. Copy
-// every hand-written `.d.ts` from the source trees we publish into the
-// matching dist location so those imports resolve. Source list:
-// type-surface.config.cjs `handwrittenDtsBlocklist`.
-const HANDWRITTEN_DTS_BLOCKLIST = new Set(typeSurface.handwrittenDtsBlocklist);
-
-function copyHandwrittenDtsFiles(srcDir, destDir) {
-  let copied = 0;
-  function walk(currentSrc, currentDest) {
-    if (!fs.existsSync(currentSrc)) return;
-    for (const entry of fs.readdirSync(currentSrc, { withFileTypes: true })) {
-      if (entry.name === 'node_modules' || entry.name === '__tests__' || entry.name === 'tests') continue;
-      const srcPath = path.join(currentSrc, entry.name);
-      const destPath = path.join(currentDest, entry.name);
-      if (entry.isDirectory()) {
-        walk(srcPath, destPath);
-        continue;
-      }
-      if (!entry.name.endsWith('.d.ts')) continue;
-      // Skip blocklisted files (see HANDWRITTEN_DTS_BLOCKLIST above).
-      if (HANDWRITTEN_DTS_BLOCKLIST.has(entry.name)) continue;
-      // Skip if the dist already has this file (vite-plugin-dts may have
-      // generated its own version from a co-located .ts file)
-      if (fs.existsSync(destPath)) continue;
-      fs.mkdirSync(path.dirname(destPath), { recursive: true });
-      fs.copyFileSync(srcPath, destPath);
-      copied++;
-    }
-  }
-  walk(srcDir, destDir);
-  return copied;
-}
-
 // SD-2893: emit declarations for the shared/common subpaths reachable from the
 // public surface. Adding shared/ to vite-plugin-dts's `include` would shift the
 // common-ancestor of all source files to the repo root and reorganise the
@@ -534,7 +498,6 @@ for (const filePath of dtsFiles) {
     const dir = basePath.replace(/\/index\.(?:js|ts)$/, '');
     return `${quote}${dir}${subpath}.js${quote}`;
   });
-
 
   // Fix .ts extensions in import specifiers → .js
   // vite-plugin-dts preserves .ts extensions from the source when the entry

@@ -42,14 +42,6 @@ const nodePolyfillShimAliases = ['buffer', 'global', 'process'].map((name) => ({
   replacement: fileURLToPath(import.meta.resolve(`vite-plugin-node-polyfills/shims/${name}`)),
 }));
 
-const visualizerConfig = {
-  filename: './dist/bundle-analysis.html',
-  template: 'treemap',
-  gzipSize: true,
-  brotliSize: true,
-  open: true
-}
-
 function resolveV2DistRelativeImportsPlugin(v2DistRoot) {
   const isRelativeImport = (specifier) => specifier.startsWith('./') || specifier.startsWith('../');
   const normalizeId = (id) => {
@@ -132,7 +124,6 @@ export const getAliases = (command, v2Resolution = getV2Resolution(command)) => 
 
   return aliases;
 };
-
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode, command }) => {

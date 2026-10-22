@@ -549,18 +549,6 @@ export interface MeasureData {
 }
 
 /**
- * Internal structure tracking fragment info during balancing.
- */
-interface FragmentInfo {
-  /** Reference to the original fragment (mutated during balancing) */
-  fragment: BalancingFragment;
-  /** Computed height of this fragment */
-  height: number;
-  /** Original array index for debugging */
-  originalIndex: number;
-}
-
-/**
  * Calculates the height of a fragment using measure data.
  *
  * For paragraph fragments, sums line heights from the measure data.

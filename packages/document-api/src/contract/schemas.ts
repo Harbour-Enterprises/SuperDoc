@@ -1394,7 +1394,6 @@ const trackedChangeAddressSchema = ref('TrackedChangeAddress');
 const entityAddressSchema = ref('EntityAddress');
 const selectionTargetSchema = ref('SelectionTarget');
 const commentTrackedChangeLinkSchema = ref('CommentTrackedChangeLink');
-const targetLocatorSchema = ref('TargetLocator');
 const deleteBehaviorSchema = ref('DeleteBehavior');
 const resolvedHandleSchema = ref('ResolvedHandle');
 const pageInfoSchema = ref('PageInfo');
@@ -1772,43 +1771,6 @@ function _listsExitResultSchemaFor(operationId: OperationId): JsonSchema {
     oneOf: [listsExitSuccessSchema, listsFailureSchemaFor(operationId)],
   };
 }
-const nodeSummarySchema = objectSchema({
-  label: { type: 'string' },
-  text: { type: 'string' },
-});
-const nodeInfoSchema: JsonSchema = {
-  type: 'object',
-  required: ['nodeType', 'kind'],
-  properties: {
-    nodeType: { enum: [...nodeTypeValues] },
-    kind: { enum: ['block', 'inline'] },
-    summary: nodeSummarySchema,
-    text: { type: 'string' },
-    nodes: arraySchema({ type: 'object' }),
-    properties: { type: 'object' },
-    bodyText: { type: 'string' },
-    bodyNodes: arraySchema({ type: 'object' }),
-  },
-  additionalProperties: false,
-};
-const matchContextSchema = objectSchema(
-  {
-    address: nodeAddressSchema,
-    snippet: { type: 'string' },
-    highlightRange: rangeSchema,
-    textRanges: arraySchema(textAddressSchema),
-    target: selectionTargetSchema,
-  },
-  ['address', 'snippet', 'highlightRange'],
-);
-const unknownNodeDiagnosticSchema = objectSchema(
-  {
-    message: { type: 'string' },
-    address: nodeAddressSchema,
-    hint: { type: 'string' },
-  },
-  ['message'],
-);
 const textSelectorSchema = objectSchema(
   {
     type: { const: 'text', description: "Must be 'text' for text pattern search." },
@@ -1843,15 +1805,6 @@ const nodeSelectorSchema = objectSchema(
   },
   ['type'],
 );
-const selectorShorthandSchema = objectSchema(
-  {
-    nodeType: { enum: [...nodeTypeValues] },
-  },
-  ['nodeType'],
-);
-const selectSchema: JsonSchema = {
-  anyOf: [textSelectorSchema, nodeSelectorSchema, selectorShorthandSchema],
-};
 // -- SDFindInput / SDFindResult schemas (SDM/1) --
 const sdTextSelectorSchema = objectSchema(
   {

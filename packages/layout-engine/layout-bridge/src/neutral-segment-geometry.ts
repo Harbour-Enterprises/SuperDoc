@@ -87,8 +87,6 @@ export type CollectSegmentGeometryOptions = {
   pageTopAt?: (pageIndex: number) => number;
 };
 
-const ATOMIC_KINDS = new Set(['image', 'drawing']);
-
 /** Visual-line content width helper: prefer measured `line.maxWidth` for alignment math. */
 const resolveAvailableWidth = (
   block: ParagraphBlock,
