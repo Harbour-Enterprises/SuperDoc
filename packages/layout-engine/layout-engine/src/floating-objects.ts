@@ -22,7 +22,6 @@ import type {
   TableMeasure,
   TableWrap,
   ColumnLayoutForAnchor,
-  ResolveAnchoredGraphicXContext,
 } from '@superdoc/contracts';
 import { resolveAnchoredGraphicX, getColumnGeometry, getColumnX } from '@superdoc/contracts';
 
@@ -144,9 +143,17 @@ export function createFloatingObjectManager(
       const objectWidth = measure.width ?? 0;
       const objectHeight = measure.height ?? 0;
 
-      const x = computeAnchorX(anchor, columnIndex, currentColumns, objectWidth, currentMargins, currentPageWidth, {
-        pageNumber,
-      });
+      const x = resolveAnchoredGraphicX(
+        anchor,
+        columnIndex,
+        currentColumns,
+        objectWidth,
+        currentMargins,
+        currentPageWidth,
+        {
+          pageNumber,
+        },
+      );
 
       const zone: ExclusionZone = {
         imageBlockId: drawingBlock.id,
@@ -422,19 +429,6 @@ export function createFloatingObjectManager(
       marginLeft = Math.max(0, currentMargins?.left ?? 0);
     },
   };
-}
-
-/** @deprecated Use {@link resolveAnchoredGraphicX} from `@superdoc/contracts`. */
-export function computeAnchorX(
-  anchor: NonNullable<ImageBlock['anchor']>,
-  columnIndex: number,
-  columns: ColumnLayout,
-  imageWidth: number,
-  margins?: { left?: number; right?: number },
-  pageWidth?: number,
-  context?: ResolveAnchoredGraphicXContext,
-): number {
-  return resolveAnchoredGraphicX(anchor, columnIndex, columns, imageWidth, margins, pageWidth, context);
 }
 
 /**

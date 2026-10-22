@@ -56,7 +56,7 @@ import {
   collectSectionBoundaryFillerBlockIdsSteps,
   isInvisibleSectionBoundaryMarkerBlock,
 } from '@superdoc/contracts';
-import { createFloatingObjectManager, computeAnchorX } from './floating-objects.js';
+import { createFloatingObjectManager } from './floating-objects.js';
 import { computeNextSectionPropsAtBreakSteps } from './section-props';
 import {
   scheduleSectionBreak as scheduleSectionBreakExport,
@@ -2832,7 +2832,7 @@ function* layoutDocumentBodySteps(
     state: PageState,
   ): number =>
     block.anchor
-      ? computeAnchorX(
+      ? resolveAnchoredGraphicX(
           block.anchor,
           state.columnIndex,
           normalizeColumns(activeColumns, activePageSize.w - (activeLeftMargin + activeRightMargin)),
@@ -2985,7 +2985,7 @@ function* layoutDocumentBodySteps(
 
     // Compute anchor X position
     const anchorX = entry.block.anchor
-      ? computeAnchorX(
+      ? resolveAnchoredGraphicX(
           entry.block.anchor,
           state.columnIndex,
           normalizeColumns(activeColumns, activePageSize.w - (activeLeftMargin + activeRightMargin)),
@@ -3868,7 +3868,7 @@ function* layoutDocumentBodySteps(
                 const anchorX =
                   existingPreRegisteredPosition?.anchorX ??
                   (siblingBlock.anchor
-                    ? computeAnchorX(
+                    ? resolveAnchoredGraphicX(
                         siblingBlock.anchor,
                         carrierColumnIndex,
                         carrierColumns,
