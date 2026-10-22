@@ -89,6 +89,7 @@ import type {
   TablesHandle,
   TableContextInfo,
   ToolbarHandle,
+  TrackChangeInfo,
   TrackChangePointHit,
   TrackChangesHandle,
   TrackChangesItem,
@@ -737,8 +738,10 @@ function identityText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+type TrackChangeAuthorship = Pick<TrackChangeInfo, 'author' | 'authorEmail'> & { authorId?: unknown };
+
 /** Same id/email-first OWN rule as editor-core `classifyOwnership`. */
-function trackedChangeOwnedByCurrentUser(change: LooseRecord, currentUser: LooseRecord | null): boolean {
+function trackedChangeOwnedByCurrentUser(change: TrackChangeAuthorship, currentUser: LooseRecord | null): boolean {
   const user = currentUser ?? {};
   const currentId = identityText(user.id).toLowerCase();
   const authorId = identityText(change.authorId).toLowerCase();
@@ -1756,10 +1759,8 @@ function projectTrackChangesItem(item: unknown): TrackChangesItem | null {
   } as TrackChangesItem;
 }
 
-function trackChangesItemPayload(item: TrackChangesItem): LooseRecord {
-  const row = item as LooseRecord;
-  const change = row.change;
-  return change && typeof change === 'object' ? (change as LooseRecord) : row;
+function trackChangesItemPayload(item: TrackChangesItem): TrackChangeInfo {
+  return item.change && typeof item.change === 'object' ? item.change : item;
 }
 
 function commandResultFromOperationResult(result: unknown): CommandExecutionResult {
@@ -5572,7 +5573,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     return undefined;
   };
 
-  const findTrackChangeForPermission = (id: string): LooseRecord | null => {
+  const findTrackChangeForPermission = (id: string): TrackChangeInfo | null => {
     syncCoordinatorEditor();
     let items: readonly unknown[] | null;
     if (hasV2ReviewWindowFeed()) {
