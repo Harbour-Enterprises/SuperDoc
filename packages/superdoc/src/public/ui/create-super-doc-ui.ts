@@ -459,6 +459,10 @@ function hostMethod(target: unknown, name: string): ((...args: unknown[]) => unk
   return typeof member === 'function' ? (...args: unknown[]): unknown => Reflect.apply(member, target, args) : null;
 }
 
+function hasAbortedFlag(value: unknown): value is { readonly aborted: boolean } {
+  return isPlainObject(value) && typeof value.aborted === 'boolean';
+}
+
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   return (
     Boolean(value) &&
@@ -2410,7 +2414,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     host: LooseRecord;
     doc: unknown;
     mount: unknown;
-    lifetime: AbortSignal;
+    lifetime: { readonly aborted: boolean };
     sourceToken: string;
     mode: string;
     info: SelectionInfo;
@@ -3058,8 +3062,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const authors = new Set<string>();
     for (const item of items) {
       const change = trackChangesItemPayload(item);
-      const row = item as LooseRecord;
-      const author = change.author ?? change.authorEmail ?? row.author ?? row.authorEmail;
+      const author = change.author ?? change.authorEmail ?? item.author ?? item.authorEmail;
       if (typeof author === 'string') authors.add(author);
     }
     const removedCount = previous.items.length - items.length;
@@ -3473,12 +3476,12 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
   let pendingPostPaintContentRefresh: {
     editor: LooseRecord;
-    readiness: LooseRecord;
+    whenPainted: (...args: unknown[]) => unknown;
     afterEpoch: number | null;
   } | null = null;
   let pendingPostPaintSelectionRefresh: {
     editor: LooseRecord;
-    readiness: LooseRecord;
+    whenPainted: (...args: unknown[]) => unknown;
     afterEpoch: number | null;
   } | null = null;
   let postPaintContentRefreshRunning = false;
@@ -3500,13 +3503,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
   const schedulePostPaintContentRefresh = (): void => {
     const editor = getEditor();
-    const readiness = editor?.documentMutationReadiness as LooseRecord | undefined;
-    if (!editor || typeof readiness?.whenPainted !== 'function') return;
-    const afterEpoch =
-      typeof readiness.getRenderEpoch === 'function'
-        ? safeCall<number | null>(() => readiness.getRenderEpoch.call(readiness), null)
-        : null;
-    pendingPostPaintContentRefresh = { editor, readiness, afterEpoch };
+    const readiness = editor?.documentMutationReadiness;
+    const whenPainted = hostMethod(readiness, 'whenPainted');
+    if (!editor || !whenPainted) return;
+    const getRenderEpoch = hostMethod(readiness, 'getRenderEpoch');
+    const epoch = getRenderEpoch ? safeCall<unknown>(() => getRenderEpoch(), null) : null;
+    const afterEpoch = typeof epoch === 'number' ? epoch : null;
+    pendingPostPaintContentRefresh = { editor, whenPainted, afterEpoch };
     if (postPaintContentRefreshRunning) return;
     postPaintContentRefreshRunning = true;
     const drainToken = postPaintContentRefreshDrainToken;
@@ -3521,8 +3524,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         }
         let paintCompleted = false;
         try {
-          await request.readiness.whenPainted.call(
-            request.readiness,
+          await request.whenPainted(
             typeof request.afterEpoch === 'number' ? { afterEpoch: request.afterEpoch } : undefined,
           );
           paintCompleted = true;
@@ -3544,13 +3546,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
   const schedulePostPaintSelectionRefresh = (): boolean => {
     const editor = getEditor();
-    const readiness = editor?.documentMutationReadiness as LooseRecord | undefined;
-    if (!editor || typeof readiness?.whenPainted !== 'function') return false;
-    const afterEpoch =
-      typeof readiness.getRenderEpoch === 'function'
-        ? safeCall<number | null>(() => readiness.getRenderEpoch.call(readiness), null)
-        : null;
-    pendingPostPaintSelectionRefresh = { editor, readiness, afterEpoch };
+    const readiness = editor?.documentMutationReadiness;
+    const whenPainted = hostMethod(readiness, 'whenPainted');
+    if (!editor || !whenPainted) return false;
+    const getRenderEpoch = hostMethod(readiness, 'getRenderEpoch');
+    const epoch = getRenderEpoch ? safeCall<unknown>(() => getRenderEpoch(), null) : null;
+    const afterEpoch = typeof epoch === 'number' ? epoch : null;
+    pendingPostPaintSelectionRefresh = { editor, whenPainted, afterEpoch };
     if (postPaintSelectionRefreshRunning) return true;
     postPaintSelectionRefreshRunning = true;
     const drainToken = postPaintSelectionRefreshDrainToken;
@@ -3565,8 +3567,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         }
         let paintCompleted = false;
         try {
-          await request.readiness.whenPainted.call(
-            request.readiness,
+          await request.whenPainted(
             typeof request.afterEpoch === 'number' ? { afterEpoch: request.afterEpoch } : undefined,
           );
           paintCompleted = true;
@@ -3935,16 +3936,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     // The public config wins while a mode change is settling. Avoid building
     // a complete runtime capability snapshot merely to read that same mode.
     if (fromConfig) return fromConfig;
-    const runtimeSnapshot = safeCall<LooseRecord | null>(
-      typeof superdocRecord?.getActiveRuntime === 'function'
-        ? () => {
-            const runtime = superdocRecord.getActiveRuntime();
-            return typeof runtime?.getSnapshot === 'function' ? (runtime.getSnapshot() as LooseRecord | null) : null;
-          }
-        : undefined,
+    const getActiveRuntime = hostMethod(superdocRecord, 'getActiveRuntime');
+    const runtimeSnapshot = safeCall<unknown>(
+      getActiveRuntime ? () => hostMethod(getActiveRuntime(), 'getSnapshot')?.() ?? null : undefined,
       null,
     );
-    const fromRuntime = normalizeDocumentMode(runtimeSnapshot?.documentMode);
+    const fromRuntime = normalizeDocumentMode(
+      isPlainObject(runtimeSnapshot) ? runtimeSnapshot.documentMode : undefined,
+    );
     const fromOptions = normalizeDocumentMode((editor?.options as LooseRecord | undefined)?.documentMode);
 
     return fromRuntime ?? fromOptions;
@@ -4048,15 +4047,15 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   };
 
   function selectionCurrentRun(): unknown {
-    const selectionApi = getDoc()?.selection as LooseRecord | undefined;
-    if (!selectionApi?.current) return undefined;
+    const current = hostMethod(getDoc()?.selection, 'current');
+    if (!current) return undefined;
     // Record the host selection this read resolves, before any await.
     const hostSelection = readHostSelectionSnapshot();
     const tag = (info: unknown): unknown => {
       if (hostSelection && info && typeof info === 'object') selectionHostSnapshots.set(info, hostSelection);
       return info;
     };
-    const result = selectionApi.current({ includeText: true });
+    const result = current({ includeText: true });
     return isPromiseLike(result) ? Promise.resolve(result).then(tag) : tag(result);
   }
 
@@ -4116,8 +4115,12 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       pendingSelectionSeedValidationToken = null;
       wholeTableParagraphSeed = null;
       const editor = getEditor();
-      const lifetime = safeCall<AbortSignal | null>(() => host?.getForegroundInteractionLifetime?.() ?? null, null);
-      const mount = safeCall<unknown>(() => host?.getMountedHandle?.() ?? null, null);
+      const rawLifetime = safeCall<unknown>(
+        () => hostMethod(host, 'getForegroundInteractionLifetime')?.() ?? null,
+        null,
+      );
+      const lifetime = hasAbortedFlag(rawLifetime) ? rawLifetime : null;
+      const mount = safeCall<unknown>(() => hostMethod(host, 'getMountedHandle')?.() ?? null, null);
       const mode = readDocumentMode();
       if (
         host &&
@@ -4222,7 +4225,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const snapshot = readHostSelectionSnapshot() as LooseRecord | null;
     const target = info?.selectionTarget as LooseRecord | undefined;
     if (!snapshot || target?.kind !== 'selection') return false;
-    const matches = (point: LooseRecord | undefined, endpoint: LooseRecord | undefined): boolean => {
+    const matches = (rawPoint: unknown, rawEndpoint: unknown): boolean => {
+      const point = isPlainObject(rawPoint) ? rawPoint : undefined;
+      const endpoint = isPlainObject(rawEndpoint) ? rawEndpoint : undefined;
       const offset = target.coordinateSpace === 'tracked' ? endpoint?.trackedBlockOffset : endpoint?.blockOffset;
       return (
         point?.kind === 'text' &&
@@ -4291,11 +4296,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
   const readCommentsDirectory = () => {
     const doc = getDoc();
-    const commentsApi = doc?.comments as LooseRecord | undefined;
+    const listComments = hostMethod(doc?.comments, 'list');
     return readAsync<CommentInfo[]>(
       'comments',
       contentToken(),
-      () => (commentsApi?.list ? commentsApi.list() : undefined),
+      () => (listComments ? listComments() : undefined),
       (raw) => (raw && Array.isArray((raw as LooseRecord).items) ? ((raw as LooseRecord).items as CommentInfo[]) : []),
     );
   };
@@ -4303,18 +4308,15 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   const readTrackChangesDirectory = (key = 'trackChanges') => {
     const token = contentToken();
     const doc = getDoc();
-    const tcApi = doc?.trackChanges as LooseRecord | undefined;
+    const listTrackChanges = hostMethod(doc?.trackChanges, 'list');
     const v2TrackedChanges = getV2TrackedChanges();
-    const listTrackedChanges =
-      typeof v2TrackedChanges?.listTrackedChanges === 'function'
-        ? (v2TrackedChanges.listTrackedChanges as AnyFn)
-        : null;
+    const listTrackedChanges = hostMethod(v2TrackedChanges, 'listTrackedChanges');
     const read = readAsync<LooseRecord[]>(
       key,
       token,
       () => {
-        if (listTrackedChanges) return runUiTrackedChangesCatalogRead(() => tcApi?.list?.({ in: 'all' }));
-        return tcApi?.list ? tcApi.list({ in: 'all' }) : undefined;
+        if (listTrackedChanges) return runUiTrackedChangesCatalogRead(() => listTrackChanges?.({ in: 'all' }));
+        return listTrackChanges ? listTrackChanges({ in: 'all' }) : undefined;
       },
       (raw) => {
         const result = raw && typeof raw === 'object' ? (raw as LooseRecord) : null;
@@ -4416,8 +4418,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const authors = new Set<string>();
     for (const item of items) {
       const change = trackChangesItemPayload(item);
-      const row = item as LooseRecord;
-      const author = change.author ?? change.authorEmail ?? row.author ?? row.authorEmail;
+      const author = change.author ?? change.authorEmail ?? item.author ?? item.authorEmail;
       if (typeof author === 'string') authors.add(author);
     }
     const value = [...authors];
@@ -4582,10 +4583,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   const computeContentControls = (selection: SelectionSlice): ContentControlsSlice => {
     const doc = getDoc();
     const ccApi = doc?.contentControls as LooseRecord | undefined;
+    const listContentControls = hostMethod(ccApi, 'list');
     const { value, status: listStatus } = readAsync<ContentControlsSlice['items']>(
       'contentControls',
       contentToken(),
-      () => (ccApi?.list ? ccApi.list() : undefined),
+      () => (listContentControls ? listContentControls() : undefined),
       (raw) =>
         raw && Array.isArray((raw as LooseRecord).items)
           ? ((raw as LooseRecord).items as ContentControlsSlice['items'])
@@ -4619,7 +4621,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     ccApi: LooseRecord | undefined,
     selection: SelectionSlice,
   ): { lockModesById: ReadonlyMap<string, string>; rows: readonly ContentControlInfo[]; status: SliceStatus } => {
-    if (!ccApi || typeof ccApi.listInRange !== 'function') {
+    const listInRange = hostMethod(ccApi, 'listInRange');
+    if (!listInRange) {
       return { lockModesById: new Map(), rows: [], status: 'ready' };
     }
     const range = selectionBlockRange(selection);
@@ -4627,7 +4630,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const { value, status } = readAsync<ContentControlInfo[]>(
       `contentControls:inRange:${selectionSignature(selection)}`,
       contentToken(),
-      () => ccApi.listInRange(range),
+      () => listInRange(range),
       (raw) =>
         raw && Array.isArray((raw as LooseRecord).items) ? ((raw as LooseRecord).items as ContentControlInfo[]) : [],
     );
@@ -4647,16 +4650,18 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const { rows, status } = computeActiveContentControlLockModes(ccApi, selection);
     const explicitTarget = selection.selectionTarget as LooseRecord | null;
     const selectionTarget = selection.target as LooseRecord | null;
-    let selectionAnchor = explicitTarget?.start as LooseRecord | undefined;
+    let selectionAnchor: { blockId: string; offset: number; story?: unknown };
     if (explicitTarget) {
+      const explicitStart = isPlainObject(explicitTarget.start) ? explicitTarget.start : undefined;
       if (
         explicitTarget.kind !== 'selection' ||
-        selectionAnchor?.kind !== 'text' ||
-        typeof selectionAnchor.blockId !== 'string' ||
-        typeof selectionAnchor.offset !== 'number'
+        explicitStart?.kind !== 'text' ||
+        typeof explicitStart.blockId !== 'string' ||
+        typeof explicitStart.offset !== 'number'
       ) {
         return retainSettledActiveContentControls([], status);
       }
+      selectionAnchor = { blockId: explicitStart.blockId, offset: explicitStart.offset, story: explicitStart.story };
     } else {
       const firstSegment =
         selectionTarget?.kind === 'text' && Array.isArray(selectionTarget.segments)
@@ -4666,12 +4671,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       if (typeof firstSegment?.blockId !== 'string' || typeof firstRange?.start !== 'number') {
         return retainSettledActiveContentControls([], status);
       }
-      selectionAnchor = {
-        kind: 'text',
-        blockId: firstSegment.blockId,
-        offset: firstRange.start,
-        story: selectionTarget?.story,
-      };
+      selectionAnchor = { blockId: firstSegment.blockId, offset: firstRange.start, story: selectionTarget?.story };
     }
     const visibleSegments =
       selectionTarget?.coordinateSpace !== 'tracked' && Array.isArray(selectionTarget?.segments)
@@ -4682,7 +4682,6 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const visibleStart =
       visibleSegment && typeof visibleSegment.blockId === 'string' && typeof visibleRange?.start === 'number'
         ? {
-            kind: 'text',
             blockId: visibleSegment.blockId,
             offset: visibleRange.start,
             story: selectionTarget?.story ?? selectionAnchor.story,
@@ -4694,7 +4693,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         : 'visible';
     const selectionStart = targetCoordinateSpace === 'tracked' ? visibleStart : selectionAnchor;
     const selectedBlockIds = selectionBlockIds(selection);
-    const selectionStartIndex = selectedBlockIds.indexOf((selectionStart ?? selectionAnchor).blockId as string);
+    const selectionStartIndex = selectedBlockIds.indexOf((selectionStart ?? selectionAnchor).blockId);
 
     const activeItems = rows
       .map((item, index) => ({ item, index }))
@@ -4775,7 +4774,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   };
 
   const computeFonts = (): FontsSlice => {
-    const fontsApi = superdoc?.fonts as LooseRecord | undefined;
+    const getDocumentFontOptions = hostMethod(superdoc?.fonts, 'getDocumentFontOptions');
+    const getFontFamilyOptions = hostMethod(superdoc?.fonts, 'getFontFamilyOptions');
     // Merge document-used families ahead of the runtime picker list (first wins
     // on case-insensitive value). `getFontFamilyOptions()` remains the source
     // for the default picker rows; the static defaults below are only an older
@@ -4787,10 +4787,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     // `getDocumentFontOptions` returns `{ logicalFamily, previewFamily }`; normalize before
     // compose so those rows are not dropped (the old `option.value` check caused SD-3887).
     const documentOptions = normalizeDocumentFontOptions(
-      safeCall<unknown[]>(fontsApi?.getDocumentFontOptions ? () => fontsApi.getDocumentFontOptions() : undefined, []),
+      safeCall<unknown>(getDocumentFontOptions ? () => getDocumentFontOptions() : undefined, []),
     );
     const pickerOptions = normalizePickerFontOptions(
-      safeCall<unknown[]>(fontsApi?.getFontFamilyOptions ? () => fontsApi.getFontFamilyOptions() : undefined, []),
+      safeCall<unknown>(getFontFamilyOptions ? () => getFontFamilyOptions() : undefined, []),
     );
     return {
       options: composeFontFamilyOptions(documentOptions, pickerOptions),
@@ -4800,14 +4800,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
   let zoomFitWidth: ZoomSlice['fitWidth'] | undefined;
   const computeZoom = (): ZoomSlice => {
-    const state = safeCall<LooseRecord | null>(
-      superdoc?.getZoomState ? () => superdoc.getZoomState() : undefined,
-      null,
-    );
+    const getZoomState = hostMethod(superdoc, 'getZoomState');
+    const rawState = safeCall<unknown>(getZoomState ? () => getZoomState() : undefined, null);
+    const state = isPlainObject(rawState) ? rawState : null;
     const value = typeof state?.value === 'number' ? state.value : 100;
     const rawMode = state?.mode;
     const mode = rawMode === 'manual' || rawMode === 'fit-width' ? rawMode : rawMode === 'fixed' ? 'manual' : null;
-    const fit = state?.fitWidth as LooseRecord | undefined;
+    const fit = isPlainObject(state?.fitWidth) ? state.fitWidth : undefined;
     const min = typeof fit?.min === 'number' ? fit.min : typeof state?.min === 'number' ? state.min : 10;
     const max = typeof fit?.max === 'number' ? fit.max : typeof state?.max === 'number' ? state.max : 100;
     // Slice subscriptions use shallow equality. Reuse unchanged policy metadata
@@ -4817,10 +4816,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   };
 
   const readMeasurementUnit = (): 'in' | 'cm' => {
-    const unit = safeCall<unknown>(
-      superdoc?.getMeasurementUnit ? () => superdoc.getMeasurementUnit() : undefined,
-      'in',
-    );
+    const getMeasurementUnit = hostMethod(superdoc, 'getMeasurementUnit');
+    const unit = safeCall<unknown>(getMeasurementUnit ? () => getMeasurementUnit() : undefined, 'in');
     return unit === 'cm' ? 'cm' : 'in';
   };
 
@@ -4855,15 +4852,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   };
 
   const resolveSelectionTextQueryItem = (selection: SelectionSlice): LooseRecord | null => {
-    const doc = getDoc();
-    const query = doc?.query as LooseRecord | undefined;
-    if (typeof query?.match !== 'function') return null;
+    const match = hostMethod(getDoc()?.query, 'match');
+    if (!match) return null;
     const request = selectionTextQueryRequest(selection);
     if (!request) return null;
     const { value } = readAsync<LooseRecord>(
       `query:${selectionSignature(selection)}`,
       contentToken(),
-      () => query.match(request),
+      () => match(request),
       (raw) => (raw && typeof raw === 'object' ? (raw as LooseRecord) : null),
     );
     return pickSelectionTextQueryItem(value, selection);

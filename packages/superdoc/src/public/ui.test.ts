@@ -11950,6 +11950,60 @@ describe('public ui — block / paragraph / list / link / create routing (row 74
     await vi.waitFor(() => expect(ui.commands.get('text-align').getState().value).toBe('center'));
   });
 
+  it('post-paint content refresh omits afterEpoch when the host render epoch is not a number', async () => {
+    let directAlignment: 'left' | undefined = 'left';
+    let effectiveAlignment: 'left' | 'center' = 'left';
+    let notifyHostEvent = (_event: unknown) => {};
+    let resolvePaint: () => void = () => undefined;
+    const painted = new Promise<void>((resolve) => {
+      resolvePaint = resolve;
+    });
+    const whenPainted = vi.fn(() => painted);
+    const getNodeById = vi.fn(() => ({
+      node: { kind: 'paragraph', paragraph: { props: { alignment: directAlignment } } },
+    }));
+    const readMountedProjectionBlocksByIds = vi.fn(() => [
+      { kind: 'paragraph', sourceAnchor: { sourceNodeId: 'P1' }, attrs: { alignment: effectiveAlignment }, runs: [] },
+      { kind: 'paragraph', sourceAnchor: { sourceNodeId: 'P2' }, attrs: { alignment: effectiveAlignment }, runs: [] },
+    ]);
+    const superdoc = makeBlockSuperdoc(
+      { getNodeById, format: { paragraph: { setAlignment: vi.fn() } } },
+      {
+        editorExtra: {
+          documentMutationReadiness: {
+            getRenderEpoch: () => undefined,
+            whenPainted,
+          },
+          host: {
+            readMountedProjectionBlocksByIds,
+            events: {
+              subscribe: (listener: (event: unknown) => void) => {
+                notifyHostEvent = listener;
+                return () => {};
+              },
+            },
+          },
+        },
+      },
+    );
+    const ui = createSuperDocUI({ superdoc });
+    expect(ui.commands.get('text-align').getState().value).toBe('left');
+
+    directAlignment = undefined;
+    notifyHostEvent({
+      type: 'collaboration:remote-changed',
+      remoteGeneration: 1,
+      changedStoryIds: ['main:/word/document.xml'],
+      changedPartUris: ['/word/document.xml'],
+    });
+
+    expect(whenPainted).toHaveBeenCalledWith(undefined);
+
+    effectiveAlignment = 'center';
+    resolvePaint();
+    await vi.waitFor(() => expect(ui.commands.get('text-align').getState().value).toBe('center'));
+  });
+
   it.each(['history', 'extension'])(
     'text-align refreshes inherited alignment after a local %s mutation paints',
     async (origin) => {
@@ -12836,6 +12890,66 @@ describe('public ui — block / paragraph / list / link / create routing (row 74
     );
     expect(whenPainted).toHaveBeenCalledWith({ afterEpoch: 17 });
     expect(ui.commands.get('font-family').getState().value).toBeUndefined();
+    ui.destroy();
+  });
+
+  it('post-paint selection refresh omits afterEpoch when the host render epoch is not a number', async () => {
+    let selection = caretSelectionInfo('P1', 1);
+    let foreground = { active: 0, pending: 0 };
+    let publishSelection: (() => void) | null = null;
+    const whenPainted = vi.fn(() => Promise.reject(new Error('paint unavailable')));
+    const host = storeCapableHost({
+      getForegroundMutationState: () => foreground,
+      readLiveSelectionSyncSnapshot: () => selection,
+      readMountedProjectionBlocksByIds: (blockIds: string[]) =>
+        blockIds.includes('P1')
+          ? [
+              {
+                kind: 'paragraph',
+                id: 'P1',
+                runs: [{ kind: 'text', text: 'a', fontFamily: 'Tahoma, sans-serif', fontSize: 16 }],
+              },
+            ]
+          : [],
+      getHandles: () => ({
+        editing: {
+          selection: {
+            subscribe: (listener: () => void) => {
+              publishSelection = listener;
+              return () => {};
+            },
+          },
+        },
+      }),
+    });
+    const superdoc = makeBlockSuperdoc(
+      {
+        selection: { current: () => selection },
+        format: { fontFamily: vi.fn(), fontSize: vi.fn() },
+      },
+      {
+        selectionInfo: selection,
+        editorExtra: {
+          host,
+          documentMutationReadiness: { getRenderEpoch: () => undefined, whenPainted },
+        },
+      },
+    );
+    const ui = createSuperDocUI({ superdoc });
+    publishSelection?.();
+    expect(ui.commands.get('font-family').getState().value).toBe('Tahoma');
+
+    foreground = { active: 1, pending: 0 };
+    selection = caretSelectionInfo('P2', 0);
+    publishSelection?.();
+
+    await vi.waitFor(() =>
+      expect(ui.selection.getSnapshot().selectionTarget).toMatchObject({
+        start: { blockId: 'P2', offset: 0 },
+        end: { blockId: 'P2', offset: 0 },
+      }),
+    );
+    expect(whenPainted).toHaveBeenCalledWith(undefined);
     ui.destroy();
   });
 
