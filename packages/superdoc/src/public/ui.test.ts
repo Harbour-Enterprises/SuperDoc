@@ -6307,6 +6307,26 @@ describe('public ui — track changes workflow parity (row 748)', () => {
     expect(decide).toHaveBeenLastCalledWith({ decision: 'reject', target: { kind: 'all' } });
   });
 
+  it('calls the first-party track-change decide handle with its owning object as receiver', async () => {
+    const trackChangesHandle = {
+      decisions: [] as string[],
+      decide(input: { decision: string }) {
+        this.decisions.push(input.decision);
+        return { success: true };
+      },
+    };
+    const { superdoc } = makeWorkflowSuperdoc({
+      trackChanges: { list: () => ({ items }), acceptAll: () => ({ success: true }) },
+      host: { getHandles: () => ({ trackChanges: trackChangesHandle }) },
+    });
+    const ui = createSuperDocUI({ superdoc });
+
+    await expect(executeFirstPartyCommandAsync(ui, BUILT_IN_COMMAND_IDS.acceptAllChanges)).resolves.toMatchObject({
+      success: true,
+    });
+    expect(trackChangesHandle.decisions).toEqual(['accept']);
+  });
+
   it('acceptAsync / rejectAsync wait for the tracked-change decision', async () => {
     const story = { kind: 'story', storyType: 'footnote', noteId: 'fn-1' };
     const decide = vi.fn(async () => ({ success: true }));
@@ -6441,6 +6461,46 @@ describe('public ui — track changes workflow parity (row 748)', () => {
     expect(ui.trackChanges.previous()).toBe('tc-1');
     // wraps around
     expect(ui.trackChanges.previous()).toBe('tc-3');
+  });
+
+  it('reads the host review target from the review snapshot when getActiveReviewTarget is absent', () => {
+    const items = [{ id: 'tc-1', type: 'insert' }];
+    const review = {
+      getSnapshot: () => ({
+        activeReviewTarget: {
+          entityType: 'trackedChange',
+          entityId: 'tc-1',
+          origin: 'document',
+          layoutEpoch: 1,
+          story: { kind: 'story', storyType: 'body' },
+        },
+      }),
+      subscribe: () => () => undefined,
+    };
+    const { superdoc } = makeWorkflowSuperdoc({
+      trackChanges: { list: () => ({ items }) },
+      host: { getHandles: () => ({ review }) },
+    });
+    const ui = createSuperDocUI({ superdoc });
+
+    expect(ui.trackChanges.getSnapshot().activeId).toBe('tc-1');
+  });
+
+  it('filters resolved comments out of comments.list when includeResolved is false', () => {
+    const { superdoc } = makeWorkflowSuperdoc({
+      comments: {
+        list: () => ({
+          items: [
+            { id: 'c-open', status: 'open' },
+            { id: 'c-done', status: 'resolved' },
+          ],
+        }),
+      },
+    });
+    const ui = createSuperDocUI({ superdoc });
+
+    expect(ui.comments.list({ includeResolved: false }).map((comment) => comment.id)).toEqual(['c-open']);
+    expect(ui.comments.list().map((comment) => comment.id)).toEqual(['c-open', 'c-done']);
   });
 
   it('follows the host review target when a document click lands beside another selection-derived change', () => {

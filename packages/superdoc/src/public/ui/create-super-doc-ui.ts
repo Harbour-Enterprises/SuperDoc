@@ -6042,8 +6042,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
    * Returns the first overlapping list row (`{ address, properties }`) or null.
    */
   const resolveCurrentHyperlink = (doc: LooseRecord | null, selection: SelectionSlice): LooseRecord | null => {
-    const linksApi = doc?.hyperlinks as LooseRecord | undefined;
-    if (!linksApi || typeof linksApi.list !== 'function') return null;
+    const listLinks = hostMethod(doc?.hyperlinks, 'list');
+    if (!listLinks) return null;
     const blockIds = selectionBlockIds(selection);
     if (!canProbeEverySelectedBlock(blockIds)) return null;
     const story = selectionStoryLocator(selection);
@@ -6052,7 +6052,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       const { value: result } = readAsync<LooseRecord>(
         story ? `hyperlinks:${storyLocatorSignature(story)}:${blockId}` : `hyperlinks:${blockId}`,
         contentToken(),
-        () => linksApi.list({ within }),
+        () => listLinks({ within }),
         (raw) => (raw && typeof raw === 'object' ? (raw as LooseRecord) : null),
       );
       const items = result && Array.isArray(result.items) ? (result.items as LooseRecord[]) : [];
@@ -6134,15 +6134,15 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     blockId: string,
     story: LooseRecord,
   ): { value: LooseRecord | null; status: SliceStatus } => {
-    const listsApi = doc?.lists as LooseRecord | undefined;
-    if (!listsApi) return { value: null, status: 'ready' };
+    const getStateInStory = hostMethod(doc?.lists, 'getStateInStory');
+    const getState = hostMethod(doc?.lists, 'getState');
+    if (!getStateInStory && !getState) return { value: null, status: 'ready' };
     const isBodyStory = story.storyType === 'body';
-    const readState =
-      typeof listsApi.getStateInStory === 'function'
-        ? () => listsApi.getStateInStory({ target: listsBlockTarget(blockId), story })
-        : isBodyStory && typeof listsApi.getState === 'function'
-          ? () => listsApi.getState({ target: listsBlockTarget(blockId) })
-          : null;
+    const readState = getStateInStory
+      ? () => getStateInStory({ target: listsBlockTarget(blockId), story })
+      : isBodyStory && getState
+        ? () => getState({ target: listsBlockTarget(blockId) })
+        : null;
     if (!readState) return { value: null, status: 'ready' };
     const { value: result, status } = readAsync<LooseRecord>(
       `lists:${storyLocatorSignature(story)}:${blockId}`,
@@ -6266,7 +6266,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     if (applied)
       return new Map(
         blockIds.flatMap((id) => {
-          const alignment = normalizeParagraphAlignment(applied.paragraphAlignments?.[id]);
+          const alignments = applied.paragraphAlignments;
+          const alignment = normalizeParagraphAlignment(isPlainObject(alignments) ? alignments[id] : undefined);
           return alignment ? [[id, alignment] as const] : [];
         }),
       );
@@ -6463,15 +6464,15 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     story: LooseRecord,
   ): ResolvedListSeed | Promise<ResolvedListSeed> => {
     const unavailable: ResolvedListSeed = { resolved: false, seed: null };
-    const listsApi = doc?.lists as LooseRecord | undefined;
-    if (!listsApi) return unavailable;
+    const getStateInStory = hostMethod(doc?.lists, 'getStateInStory');
+    const getState = hostMethod(doc?.lists, 'getState');
+    if (!getStateInStory && !getState) return unavailable;
     const isBodyStory = story.storyType === 'body';
-    const readState =
-      typeof listsApi.getStateInStory === 'function'
-        ? () => listsApi.getStateInStory({ target: listsBlockTarget(blockId), story })
-        : isBodyStory && typeof listsApi.getState === 'function'
-          ? () => listsApi.getState({ target: listsBlockTarget(blockId) })
-          : null;
+    const readState = getStateInStory
+      ? () => getStateInStory({ target: listsBlockTarget(blockId), story })
+      : isBodyStory && getState
+        ? () => getState({ target: listsBlockTarget(blockId) })
+        : null;
     if (!readState) return unavailable;
 
     const normalize = (raw: unknown): ResolvedListSeed => {
@@ -7174,11 +7175,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   let detachDocumentSelection: (() => void) | null = null;
 
   const readHostSelectionSource = (): LooseRecord | null => {
-    const editor = getEditor();
-    const host = editor?.host as LooseRecord | undefined;
-    const handles = safeCall<LooseRecord | null>(host?.getHandles ? () => host.getHandles() : undefined, null);
-    const selection = handles?.editing?.selection;
-    return selection && typeof selection.subscribe === 'function' ? (selection as LooseRecord) : null;
+    const readHandles = hostMethod(getEditor()?.host, 'getHandles');
+    const handles = safeCall<unknown>(readHandles ?? undefined, null);
+    const editing = isPlainObject(handles) ? handles.editing : undefined;
+    const selection = isPlainObject(editing) ? editing.selection : undefined;
+    return isPlainObject(selection) && typeof selection.subscribe === 'function' ? selection : null;
   };
 
   const caretSelectionNeedsProjectionPaint = (): boolean => {
@@ -7222,7 +7223,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       detachHostSelection = () => {
         for (const detach of unsubscribeCallbacks) detach();
       };
-      const unsubscribe = next.subscribe((snapshot: unknown) => {
+      const unsubscribe = hostMethod(
+        next,
+        'subscribe',
+      )?.((snapshot: unknown) => {
         // A foreground text mutation can move the caret before its new block is
         // in the mounted projection. Publish that selection after the exact
         // paint boundary so command state never describes unpainted content.
@@ -7239,19 +7243,20 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         refreshSelectionFromHost(snapshot);
         recompute('host-selection');
       });
-      if (typeof unsubscribe === 'function') unsubscribeCallbacks.push(unsubscribe);
-      const host = getHost();
-      const handles = safeCall<LooseRecord | null>(host?.getHandles ? () => host.getHandles() : undefined, null);
-      const tableSelection = handles?.selection;
-      if (typeof tableSelection?.subscribeWholeTable === 'function') {
+      if (typeof unsubscribe === 'function') unsubscribeCallbacks.push(() => unsubscribe());
+      const readHandles = hostMethod(getHost(), 'getHandles');
+      const handles = safeCall<unknown>(readHandles ?? undefined, null);
+      const tableSelection = isPlainObject(handles) ? handles.selection : undefined;
+      const subscribeWholeTable = hostMethod(tableSelection, 'subscribeWholeTable');
+      if (subscribeWholeTable) {
         const refreshWholeTable = (): void => {
           selectionEpoch += 1;
           refreshSelectionFromHost(undefined, false, true);
           recompute('host-selection');
         };
-        const detach = tableSelection.subscribeWholeTable(refreshWholeTable);
-        if (typeof detach === 'function') unsubscribeCallbacks.push(detach);
-        const nodeId = tableSelection.getWholeTableNodeId?.();
+        const detach = subscribeWholeTable(refreshWholeTable);
+        if (typeof detach === 'function') unsubscribeCallbacks.push(() => detach());
+        const nodeId = hostMethod(tableSelection, 'getWholeTableNodeId')?.();
         if (nodeId) refreshWholeTable();
       }
     } catch {
@@ -7260,23 +7265,19 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   };
 
   const readHostReviewSource = (): LooseRecord | null => {
-    const editor = getEditor();
-    const host = editor?.host as LooseRecord | undefined;
-    const handles = safeCall<LooseRecord | null>(host?.getHandles ? () => host.getHandles() : undefined, null);
-    const review = handles?.review;
-    return review && typeof review.subscribe === 'function' ? (review as LooseRecord) : null;
+    const readHandles = hostMethod(getEditor()?.host, 'getHandles');
+    const handles = safeCall<unknown>(readHandles ?? undefined, null);
+    const review = isPlainObject(handles) ? handles.review : undefined;
+    return isPlainObject(review) && typeof review.subscribe === 'function' ? review : null;
   };
 
   const readHostActiveReviewTarget = (review: LooseRecord | null): unknown => {
-    if (!review) return null;
-    if (typeof review.getActiveReviewTarget === 'function') {
-      return safeCall(() => review.getActiveReviewTarget(), null);
-    }
-    if (typeof review.getSnapshot === 'function') {
-      const snapshot = safeCall<LooseRecord | null>(() => review.getSnapshot(), null);
-      return snapshot?.activeReviewTarget ?? null;
-    }
-    return null;
+    const getActiveReviewTarget = hostMethod(review, 'getActiveReviewTarget');
+    if (getActiveReviewTarget) return safeCall(() => getActiveReviewTarget(), null);
+    const getSnapshot = hostMethod(review, 'getSnapshot');
+    if (!getSnapshot) return null;
+    const snapshot = safeCall<unknown>(() => getSnapshot(), null);
+    return isPlainObject(snapshot) ? (snapshot.activeReviewTarget ?? null) : null;
   };
 
   let trackedChangeNavigationInFlight = 0;
@@ -7385,7 +7386,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     }
     let attaching = true;
     try {
-      const unsubscribe = next.subscribe((snapshot: unknown) => {
+      const unsubscribe = hostMethod(
+        next,
+        'subscribe',
+      )?.((snapshot: unknown) => {
         const snapshotRecord = snapshot && typeof snapshot === 'object' ? (snapshot as LooseRecord) : null;
         const target =
           snapshotRecord && Object.prototype.hasOwnProperty.call(snapshotRecord, 'activeReviewTarget')
@@ -7397,7 +7401,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         if (!syncTrackedChangeFocusFromHostReviewTarget(target, snapshot) || attaching) return;
         recompute();
       });
-      if (typeof unsubscribe === 'function') detachHostReview = unsubscribe;
+      if (typeof unsubscribe === 'function') detachHostReview = () => unsubscribe();
       syncTrackedChangeFocusFromHostReviewTarget(readHostActiveReviewTarget(next));
     } catch {
       currentHostReviewSource = null;
@@ -7457,8 +7461,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   const syncHostEventsSubscription = (): void => {
     const editor = getEditor();
     const host = editor?.host as LooseRecord | undefined;
-    const events = host?.events as LooseRecord | undefined;
-    const next = events && typeof events.subscribe === 'function' ? events : null;
+    const events = host?.events;
+    const next = isPlainObject(events) && typeof events.subscribe === 'function' ? events : null;
     if (next === currentHostEventsSource) return;
     if (detachHostEvents) {
       detachHostEvents();
@@ -7472,7 +7476,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       seedLocalDocumentMutation(host);
     }
     try {
-      const off = next.subscribe((event: LooseRecord) => {
+      const off = hostMethod(
+        next,
+        'subscribe',
+      )?.((event: LooseRecord) => {
         const type = event?.type;
         const isStandaloneDocumentMutation = type === 'document:mutated' && event.hasCommitEvent !== true;
         if (
@@ -7638,7 +7645,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
           recompute();
         }
       });
-      if (typeof off === 'function') detachHostEvents = off;
+      if (typeof off === 'function') detachHostEvents = () => off();
     } catch {
       currentHostEventsSource = null;
     }
@@ -8166,15 +8173,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   function executeListToggleCommand(kind: 'bullet' | 'ordered', payload: unknown): CommandExecutionResult {
     if (hasInactiveTextSelection()) return false;
     const editCommands = getEditCommands();
-    const lists = editCommands?.lists as LooseRecord | undefined;
-    const apply = lists?.apply;
+    const apply = hostMethod(editCommands?.lists, 'apply');
     const host = getHost();
     const firstPartyMutation =
       firstPartyCommandDoc !== undefined && getEditor()?.editorVersion === 2 && host
         ? firstPartyCommandMutations.get(superdoc)?.get(host)
         : null;
     if (firstPartyCommandDoc !== undefined && getEditor()?.editorVersion === 2 && !firstPartyMutation) return false;
-    if (!firstPartyMutation && typeof apply !== 'function') return false;
+    if (!firstPartyMutation && !apply) return false;
     // The style dropdowns emit a bare style-key string (e.g. 'upper-roman');
     // the public command surface also accepts an options object. Normalize both
     // into { behavior?, preset?, continuity? }. The command id owns `kind`.
@@ -8189,9 +8195,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     if (preset !== undefined) input.preset = preset;
     if (continuity !== undefined) input.continuity = continuity;
     try {
-      return settleCommandExecution(
-        firstPartyMutation ? firstPartyMutation.runListApply(input) : apply.call(lists, input),
-      );
+      return settleCommandExecution(firstPartyMutation ? firstPartyMutation.runListApply(input) : apply?.(input));
     } catch {
       return false;
     }
@@ -8570,11 +8574,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
    * pattern the delete/replace callers use.
    */
   function currentCellSelectionTarget(): TextSelectionTarget | null {
-    const handles = safeCall<LooseRecord | null>(() => getHost()?.getHandles?.(), null);
-    const held = handles?.selection?.getSnapshot?.();
-    if (!held?.tableCells) return null;
-    const resolved = handles?.selection?.toSelectionTarget?.();
-    return resolved?.kind === 'ok' && resolved.mode === 'range' ? capturedTableCellTarget(resolved.target) : null;
+    const handles = safeCall<unknown>(() => hostMethod(getHost(), 'getHandles')?.(), null);
+    const selection = isPlainObject(handles) ? handles.selection : undefined;
+    const held = hostMethod(selection, 'getSnapshot')?.();
+    if (!isPlainObject(held) || !held.tableCells) return null;
+    const resolved = hostMethod(selection, 'toSelectionTarget')?.();
+    return isPlainObject(resolved) && resolved.kind === 'ok' && resolved.mode === 'range'
+      ? capturedTableCellTarget(resolved.target)
+      : null;
   }
 
   function resolveInlineCommandTarget(selection: SelectionSlice): SelectionTarget | null {
@@ -8585,13 +8592,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     target: unknown,
   ): Readonly<{ anchorBlockId: string; focusBlockId: string }> | null {
     const cellTarget = currentCellSelectionTarget();
-    const candidate = target as LooseRecord | undefined;
+    const start = isPlainObject(target) && isPlainObject(target.start) ? target.start : undefined;
+    const end = isPlainObject(target) && isPlainObject(target.end) ? target.end : undefined;
     if (
       !cellTarget ||
-      candidate?.start?.blockId !== cellTarget.start.blockId ||
-      candidate?.end?.blockId !== cellTarget.end.blockId ||
-      candidate?.start?.offset !== cellTarget.start.offset ||
-      candidate?.end?.offset !== cellTarget.end.offset
+      start?.blockId !== cellTarget.start.blockId ||
+      end?.blockId !== cellTarget.end.blockId ||
+      start?.offset !== cellTarget.start.offset ||
+      end?.offset !== cellTarget.end.offset
     )
       return null;
     return { anchorBlockId: cellTarget.start.blockId, focusBlockId: cellTarget.end.blockId };
@@ -9063,10 +9071,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const doc = getDoc();
     const linksApi = doc?.hyperlinks as LooseRecord | undefined;
     if (!linksApi) return false;
-    const hyperlinkHost = getHost();
-    const hyperlinkHandles = typeof hyperlinkHost?.getHandles === 'function' ? hyperlinkHost.getHandles() : null;
+    const hyperlinkHandles = hostMethod(getHost(), 'getHandles')?.();
+    const hyperlinkEditing = isPlainObject(hyperlinkHandles) ? hyperlinkHandles.editing : undefined;
+    const trustedHyperlinks = isPlainObject(hyperlinkEditing) ? hyperlinkEditing.hyperlinks : undefined;
     const trustedLinksApi = firstPartyCommandDoc
-      ? ((hyperlinkHandles?.editing as LooseRecord | undefined)?.hyperlinks as LooseRecord | undefined)
+      ? isPlainObject(trustedHyperlinks)
+        ? trustedHyperlinks
+        : undefined
       : linksApi;
     const record = readLinkPayloadRecord(payload);
     const href = readLinkPayloadHref(payload);
@@ -9296,7 +9307,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     if (requestedHyperlinkTarget) return finish(null);
     if (payloadTarget === null) return finish(resolveCurrentHyperlink(doc, linkSelection));
     const blockIds = selectionBlockIds(linkSelection);
-    if (!canProbeEverySelectedBlock(blockIds) || typeof linksApi.list !== 'function') return false;
+    const listLinks = hostMethod(linksApi, 'list');
+    if (!canProbeEverySelectedBlock(blockIds) || !listLinks) return false;
     const commandEditor = getEditor(),
       commandDocSource = commandEditor?.doc;
     const commandMode = readDocumentMode(),
@@ -9305,7 +9317,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     try {
       // A user command reads its explicit target now; passive toolbar read
       // deferral must not turn an unknown hyperlink into a plain-text wrap.
-      const reads = blockIds.map((blockId) => linksApi.list({ within: paragraphTarget(blockId, story) }));
+      const reads = blockIds.map((blockId) => listLinks({ within: paragraphTarget(blockId, story) }));
       const validReports = (reports: unknown[]) =>
         reports.every((report) => isPlainObject(report) && Array.isArray(report.items));
       const existingFrom = (reports: unknown[]): LooseRecord | null => {
@@ -9389,7 +9401,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       } else {
         at = createLocationAt(state.selection, 'target');
         if (nonBodyStory && at.kind === 'after') {
-          at = { ...at, target: { ...at.target, story: nonBodyStory } };
+          at = { ...at, target: { ...(isPlainObject(at.target) ? at.target : {}), story: nonBodyStory } };
         }
       }
       const input: LooseRecord = { src, at };
@@ -9434,10 +9446,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const host = getHost();
     if (!host) return null;
     if (firstPartyCommandDoc !== undefined) {
-      const handles = typeof host.getHandles === 'function' ? host.getHandles() : null;
-      return (handles?.editing as LooseRecord | undefined)?.fields ?? null;
+      const handles = hostMethod(host, 'getHandles')?.();
+      const editing = isPlainObject(handles) ? handles.editing : undefined;
+      const commands = isPlainObject(editing) ? editing.fields : undefined;
+      return isPlainObject(commands) ? commands : null;
     }
-    return typeof host.getCodeFieldEditingCommands === 'function' ? host.getCodeFieldEditingCommands() : null;
+    const commands = hostMethod(host, 'getCodeFieldEditingCommands')?.();
+    return isPlainObject(commands) ? commands : null;
   };
 
   /**
@@ -9470,10 +9485,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const host = getHost();
     if (!host) return null;
     if (firstPartyCommandDoc !== undefined) {
-      const handles = typeof host.getHandles === 'function' ? host.getHandles() : null;
-      return (handles?.editing as LooseRecord | undefined)?.pageNumbers ?? null;
+      const handles = hostMethod(host, 'getHandles')?.();
+      const editing = isPlainObject(handles) ? handles.editing : undefined;
+      const commands = isPlainObject(editing) ? editing.pageNumbers : undefined;
+      return isPlainObject(commands) ? commands : null;
     }
-    return typeof host.getCodePageNumberEditingCommands === 'function' ? host.getCodePageNumberEditingCommands() : null;
+    const commands = hostMethod(host, 'getCodePageNumberEditingCommands')?.();
+    return isPlainObject(commands) ? commands : null;
   };
 
   /** Route a page-numbers command (`headerFooters.pageNumbers.set` or `.remove` for the caret's section). */
@@ -9509,10 +9527,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const host = getHost();
     if (!host) return null;
     if (firstPartyCommandDoc !== undefined) {
-      const handles = typeof host.getHandles === 'function' ? host.getHandles() : null;
-      return (handles?.editing as LooseRecord | undefined)?.tables ?? null;
+      const handles = hostMethod(host, 'getHandles')?.();
+      const editing = isPlainObject(handles) ? handles.editing : undefined;
+      const commands = isPlainObject(editing) ? editing.tables : undefined;
+      return isPlainObject(commands) ? commands : null;
     }
-    return typeof host.getCodeTableEditingCommands === 'function' ? host.getCodeTableEditingCommands() : null;
+    const commands = hostMethod(host, 'getCodeTableEditingCommands')?.();
+    return isPlainObject(commands) ? commands : null;
   };
 
   /**
@@ -9578,11 +9599,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       owner.editor.doc !== owner.doc ||
       owner.sourceToken !== contentToken() ||
       owner.mode !== readDocumentMode() ||
-      safeCall<unknown>(() => host?.getMountedHandle?.(), null) !== owner.mount
+      safeCall<unknown>(() => hostMethod(host, 'getMountedHandle')?.(), null) !== owner.mount
     )
       return false;
     const tableId = owner.info.tableSelection?.tableId;
-    const activeTable = safeCall<unknown>(() => host?.getHandles?.().selection?.getWholeTableNodeId?.(), null);
+    const activeTable = safeCall<unknown>(() => {
+      const handles = hostMethod(host, 'getHandles')?.();
+      return hostMethod(isPlainObject(handles) ? handles.selection : undefined, 'getWholeTableNodeId')?.();
+    }, null);
     if (
       !tableId ||
       activeTable !== tableId ||
@@ -9916,7 +9940,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const doc = editor?.doc;
     const host = editor?.host;
     const mode = readDocumentMode();
-    const lifetime = safeCall<AbortSignal | undefined>(() => host?.getForegroundInteractionLifetime?.(), undefined);
+    const rawLifetime = safeCall<unknown>(() => hostMethod(host, 'getForegroundInteractionLifetime')?.(), undefined);
+    const lifetime = hasAbortedFlag(rawLifetime) ? rawLifetime : undefined;
     const isCurrent = () =>
       !disposed &&
       getEditor() === editor &&
@@ -11153,10 +11178,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     commentMutationsAreReadOnly() ? failedReceipt('Comments are read-only.', 'DOCUMENT_READONLY') : null;
 
   const filterCommentsSnapshot = (items: readonly CommentInfo[], query?: unknown): readonly CommentInfo[] => {
-    const record = query && typeof query === 'object' ? (query as LooseRecord) : null;
+    const record = isPlainObject(query) ? query : null;
     let filtered = Array.from(items);
     if (record?.includeResolved === false) {
-      filtered = filtered.filter((item) => (item as LooseRecord).status !== 'resolved');
+      filtered = filtered.filter((item) => item.status !== 'resolved');
     }
     const rawOffset = Number(record?.offset);
     const offset = Number.isInteger(rawOffset) && rawOffset > 0 ? rawOffset : 0;
@@ -11182,9 +11207,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       const fromSnapshot = commentsSub.get().items.find((item) => readEntityId(item) === commentId) ?? null;
       if (fromSnapshot) return fromSnapshot;
       const doc = getDoc();
-      const commentsApi = doc?.comments as LooseRecord | undefined;
+      const getComment = hostMethod(doc?.comments, 'get');
       const result = safeCall<CommentInfo | null>(
-        commentsApi?.get ? () => commentsApi.get({ commentId }) : undefined,
+        getComment ? () => getComment({ commentId }) as CommentInfo | null : undefined,
         null,
       );
       return isPromiseLike(result) ? null : result;
@@ -11798,13 +11823,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const bulkBlocked = bulkTrackDecisionBlockedReason({ kind, scope: isAllTarget ? 'all' : 'id' }, tcApi);
     if (bulkBlocked) return false;
     if (firstPartyCommandDoc) {
-      const host = getHost();
-      const handles = safeCall<LooseRecord | null>(
-        typeof host?.getHandles === 'function' ? () => host.getHandles() : undefined,
-        null,
-      );
-      const decide = (handles?.trackChanges as LooseRecord | undefined)?.decide;
-      return typeof decide === 'function' ? decide({ decision: kind, target }) : false;
+      const readHandles = hostMethod(getHost(), 'getHandles');
+      const handles = safeCall<unknown>(readHandles ?? undefined, null);
+      const decide = hostMethod(isPlainObject(handles) ? handles.trackChanges : undefined, 'decide');
+      return decide ? decide({ decision: kind, target }) : false;
     }
     const legacyName = isAllTarget ? `${kind}All` : kind;
     // A story-scoped per-id decision MUST go through `decide`: the legacy
@@ -11973,7 +11995,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         }
         if (getEditor() !== editor || getHost() !== host) return { success: false, reason: 'not-ready' };
       }
-      host?.getMountedHandle?.()?.focus?.focus({ preventScroll: true });
+      const mounted = hostMethod(host, 'getMountedHandle')?.();
+      const focusHandle = isPlainObject(mounted) ? mounted.focus : undefined;
+      hostMethod(focusHandle, 'focus')?.({ preventScroll: true });
       activateContentControlChrome(id);
       return { success: true };
     },
