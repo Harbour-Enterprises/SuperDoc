@@ -1150,16 +1150,34 @@ const SDT_CONTAINER_STYLES = `
 
 /* Structured Content Inline - Inline wrapper with blue border */
 .superdoc-structured-content-inline {
-  padding: 1px;
+  padding: 0;
   box-sizing: border-box;
   border-radius: 4px;
-  border: 1px solid transparent;
+  border: 0 solid transparent;
   background-color: var(--sd-content-controls-inline-bg, transparent);
   position: relative;
   display: inline;
   font-size: initial;
   line-height: normal;
   z-index: 10;
+}
+
+.superdoc-structured-content-inline::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  border: 1px solid;
+  border-color: inherit;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.superdoc-structured-content-inline[data-appearance='hidden']::after,
+.superdoc-structured-content-inline[data-word-checkbox='true']::after,
+.superdoc-cc-chrome-none .superdoc-structured-content-inline::after,
+.presentation-editor--viewing .superdoc-structured-content-inline::after {
+  content: none;
 }
 
 .superdoc-structured-content-inline[data-contains-inline-image='true']:not([data-appearance='hidden']) {
@@ -1504,6 +1522,10 @@ const SDT_CONTAINER_STYLES = `
 
   .superdoc-structured-content-block::after {
     border: none;
+  }
+
+  .superdoc-structured-content-inline::after {
+    content: none;
   }
 
   .superdoc-structured-content-block::before {

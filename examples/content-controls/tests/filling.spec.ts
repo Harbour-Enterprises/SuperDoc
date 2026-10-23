@@ -9,6 +9,7 @@ async function activeContentControlId(page: Page) {
   return page.evaluate(() => {
     const caret = document.querySelector<HTMLElement>('[data-v2-local-selection-caret]')?.getBoundingClientRect();
     if (!caret) return null;
+    const caretCenterY = caret.top + caret.height / 2;
     const ids = new Set(
       [...document.querySelectorAll<HTMLElement>('[data-sdt-id]')]
         .filter((element) => {
@@ -16,8 +17,8 @@ async function activeContentControlId(page: Page) {
           return (
             caret.left >= rect.left - 1 &&
             caret.left <= rect.right + 1 &&
-            caret.top >= rect.top - 1 &&
-            caret.top <= rect.bottom + 1
+            caretCenterY >= rect.top - 1 &&
+            caretCenterY <= rect.bottom + 1
           );
         })
         .map((element) => element.dataset.sdtId)
