@@ -72,6 +72,7 @@ function makeHarness(
     selectionCurrent?: () => unknown;
     syncSelection?: () => unknown;
     reviewWindowItems?: () => Record<string, unknown>[];
+    trackedChangesCatalog?: () => unknown;
   } = {},
 ): Harness {
   let stage: LoadStage = initialStage;
@@ -121,7 +122,9 @@ function makeHarness(
   }));
   // Model the worker-backed bridge: both logical UI cache keys attach to one
   // shared asynchronous catalog transport.
-  const trackChangesFeedList = vi.fn(() => Promise.resolve({ items: options.reviewWindowItems?.() ?? [] }));
+  const trackChangesFeedList = vi.fn(
+    options.trackedChangesCatalog ?? (() => Promise.resolve({ items: options.reviewWindowItems?.() ?? [] })),
+  );
 
   const selectionCurrent = vi.fn(options.selectionCurrent ?? (() => currentSelection));
   const doc = {
@@ -522,6 +525,49 @@ describe('public ui — heavy-read policy behavior details', () => {
     expect(contentControlsList.mock.calls.length).toBeLessThanOrEqual(8);
     harness.ui.destroy();
   });
+
+  it.each(['sync', 'async', 'throw'])(
+    'retries a %s failed tracked-change catalog without publishing an empty directory',
+    async (transport) => {
+      vi.useFakeTimers();
+      const item = { id: 'restored-change', type: 'insert', insertedText: 'Restored after Undo' };
+      let failNext = false;
+      const catalog = vi.fn(() => {
+        const failed = failNext;
+        const result = failNext
+          ? {
+              ok: false,
+              reason: 'track-changes-list-failed',
+              detail: 'Tracked-change directory changed while it was being read.',
+            }
+          : { ok: true, items: [item] };
+        failNext = false;
+        if (transport === 'throw' && failed) throw new Error(result.detail);
+        return transport === 'sync' ? result : Promise.resolve(result);
+      });
+      const harness = makeHarness('source-complete', { reviewWindowItems: () => [], trackedChangesCatalog: catalog });
+      const snapshots: Array<{ status: string; total: number }> = [];
+      const stop = harness.ui.trackChanges.observe((snapshot) =>
+        snapshots.push({ status: snapshot.status, total: snapshot.total }),
+      );
+      try {
+        await settle(1000);
+        expect(harness.ui.trackChanges.setActive(item.id)).toBe(true);
+        const before = catalog.mock.calls.length;
+        snapshots.length = 0;
+        failNext = true;
+        harness.emitMutation();
+        await settle(2000);
+        expect(snapshots.filter((snapshot) => snapshot.status === 'ready' && snapshot.total === 0)).toEqual([]);
+        expect(catalog.mock.calls.length).toBeGreaterThan(before + 1);
+        expect(snapshots.at(-1)).toMatchObject({ status: 'ready', total: 1 });
+        expect(harness.ui.trackChanges.setActive(item.id)).toBe(true);
+      } finally {
+        stop();
+        harness.ui.destroy();
+      }
+    },
+  );
 
   it('serves settled content-control items as stale (not blank) during loading', async () => {
     vi.useFakeTimers();

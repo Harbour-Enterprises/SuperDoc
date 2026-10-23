@@ -1018,6 +1018,7 @@ export const OPERATION_DEFINITIONS = {
       'Replace content at a contiguous document selection. ' +
       'Text path accepts a SelectionTarget or ref plus replacement text. ' +
       'For explicit single-paragraph text selections, expectedText rejects mismatches with PRECONDITION_FAILED before mutation. ' +
+      'Tracked text replacements accept replacementGranularity: word (default), phrase (join neighboring edits separated only by spaces), or range (replace the complete selection). This requires an explicit single-paragraph text selection. ' +
       'Rich string path accepts HTML or Markdown plus a BlockNodeAddress, SelectionTarget, or ref. ' +
       'Structural path accepts the same locator forms plus SDFragment content. ' +
       "A single-paragraph rich replacement may overlap pending insertions: tracked mode drops the covered part of your own insertion, nests a deletion inside another author's insertion, and adds the content as a new insertion; direct mode removes the covered part and leaves the rest pending. " +
@@ -3196,7 +3197,8 @@ export const OPERATION_DEFINITIONS = {
   },
   'mutations.commitTemporary': {
     memberPath: 'mutations.commitTemporary',
-    description: 'Commit the visible temporary preview as one undo entry.',
+    description:
+      'Commit the visible temporary preview as one undo entry, optionally applying final operations atomically.',
     expectedResult: 'Returns a temporary mutation receipt with preview identity and caller tag.',
     requiresDocumentContext: true,
     batchable: false,

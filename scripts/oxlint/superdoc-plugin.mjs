@@ -97,10 +97,6 @@ const noLocalObjectGuard = {
   },
 };
 
-// typescript/ban-ts-comment skips JavaScript, where these directives still
-// silence `@ts-check` and `checkJs`. A block comment counts the way
-// TypeScript reads it: from `/*` on one line, or from the start of its last
-// line otherwise.
 const LINE_DIRECTIVE = /^\/?\s*@ts-(?:expect-error|ignore|nocheck)\b/;
 const BLOCK_DIRECTIVE = /^[/*]*\s*@ts-(?:expect-error|ignore)\b/;
 

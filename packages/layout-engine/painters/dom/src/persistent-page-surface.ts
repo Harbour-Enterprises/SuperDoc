@@ -526,8 +526,8 @@ function reconcileScaffoldShells(
             stampPersistentPageRoot(ctx, old.element, band);
             old.element.dataset.layoutEpoch = String(scaffold.generation);
             ctx.work.persistentPagesUpdated += 1;
+            shells = shells.withEntry(index, { element: old.element, shellKey });
           }
-          shells = shells.withEntry(index, { element: old.element, shellKey });
         } else {
           const element = renderPageShell(ctx.contentContext, { width: band.widthPx, height: band.heightPx });
           stampPersistentPageRoot(ctx, element, band);

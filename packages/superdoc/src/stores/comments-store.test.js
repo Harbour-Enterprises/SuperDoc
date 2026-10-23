@@ -3787,6 +3787,156 @@ describe('comments-store committed review-window apply', () => {
     });
   }
 
+  function trackedPublication(rows, version, overrides = {}) {
+    return {
+      epoch: 'document',
+      baseVersion: version - 1,
+      version,
+      coordinate: { documentEpoch: 'document', mountId: 'mount', commitSequence: version, reviewVersion: version },
+      instances: rows.map((row, index) => ({
+        id: row.changeId,
+        rowId: row.changeId,
+        threadId: row.changeId,
+        top: index * 20 + version,
+      })),
+      rowVersions: Object.fromEntries(rows.map((row) => [row.changeId, 1])),
+      threads: Object.fromEntries(rows.map((row) => [row.changeId, [row.changeId]])),
+      groupOrder: { open: rows.map((row) => row.changeId), resolved: [] },
+      ...overrides,
+    };
+  }
+
+  function publishTracked(rows, presentation) {
+    return apply({
+      commentItems: [],
+      trackedChangeItems: rows.map((row) => ({ id: row.changeId })),
+      preparedReview: { comments: [], trackedChanges: rows, presentation },
+    });
+  }
+
+  function trackedParams(id, text = id) {
+    return {
+      event: 'add',
+      changeId: id,
+      trackedChangeCanonicalId: id,
+      trackedChangeText: text,
+      trackedChangeType: 'insert',
+      trackedChangeDisplayType: 'insert',
+      trackedChangeAnchorKey: `tc::body::${id}`,
+    };
+  }
+
+  function countRowUpdates(callback) {
+    const previous = globalThis.__superdocInteractionTrace;
+    let calls = 0;
+    globalThis.__superdocInteractionTrace = {
+      startSpan(stage) {
+        if (stage === 'store.trackedChanges.handleUpdate') calls++;
+        return null;
+      },
+    };
+    try {
+      const result = callback();
+      return { result, calls };
+    } finally {
+      if (previous === undefined) delete globalThis.__superdocInteractionTrace;
+      else globalThis.__superdocInteractionTrace = previous;
+    }
+  }
+
+  it.each([0, 1])('publishes fresh geometry while reconciling only %s changed semantic rows', (changed) => {
+    const rows = ['first', 'second', 'third'].map((id) => trackedParams(id));
+    expect(publishTracked(rows, trackedPublication(rows, 1)).ok).toBe(true);
+    const retained = [...store.commentsList];
+    store.activeComment = 'first';
+    const nextRows = rows.map((row, index) =>
+      index === 2 && changed ? { ...row, trackedChangeText: 'typed 😀' } : row,
+    );
+    const next = trackedPublication(nextRows, 2, { rowVersions: { first: 1, second: 1, third: 1 + changed } });
+
+    const { result, calls } = countRowUpdates(() => publishTracked(nextRows, next));
+
+    expect(result.ok).toBe(true);
+    expect(calls).toBe(changed);
+    expect(store.commentsList).toHaveLength(3);
+    retained.forEach((row, index) => expect(store.commentsList[index]).toBe(row));
+    expect(store.commentsList[2].trackedChangeText).toBe(changed ? 'typed 😀' : 'third');
+    expect(store.activeComment).toBe('first');
+    expect(store.committedReviewPresentations['doc-1']).toBe(next);
+    expect(store.committedReviewPresentations['doc-1'].instances[0].top).toBe(2);
+    expect(store.committedReviewPresentations['doc-1'].coordinate.commitSequence).toBe(2);
+  });
+
+  it.each(['gap', 'epoch', 'mount', 'empty-mount', 'commit', 'review-version', 'previous-review-version'])(
+    'reconciles rows normally when the retained publication has an invalid %s chain',
+    (invalid) => {
+      const rows = [trackedParams('first'), trackedParams('second')];
+      const previous = trackedPublication(rows, 1);
+      expect(publishTracked(rows, previous).ok).toBe(true);
+      const next = trackedPublication(rows, 2);
+      if (invalid === 'gap') next.baseVersion = 0;
+      if (invalid === 'epoch') next.coordinate.documentEpoch = next.epoch = 'replacement';
+      if (invalid === 'mount') next.coordinate.mountId = 'replacement';
+      if (invalid === 'empty-mount') previous.coordinate.mountId = next.coordinate.mountId = '';
+      if (invalid === 'commit') next.coordinate.commitSequence = 0;
+      if (invalid === 'review-version') next.coordinate.reviewVersion = 1;
+      if (invalid === 'previous-review-version') previous.coordinate.reviewVersion = 0;
+
+      const { result, calls } = countRowUpdates(() => publishTracked(rows, next));
+
+      expect(result.ok).toBe(true);
+      expect(calls).toBe(2);
+      expect(store.commentsList.map((row) => row.trackedChangeText)).toEqual(['first', 'second']);
+    },
+  );
+
+  it.each(['missing', 'resolved', 'type'])(
+    'reconciles a %s row even when its worker version is unchanged',
+    (invalid) => {
+      const rows = [trackedParams('first'), trackedParams('second')];
+      expect(publishTracked(rows, trackedPublication(rows, 1)).ok).toBe(true);
+      if (invalid === 'missing') store.commentsList.splice(1, 1);
+      if (invalid === 'resolved') store.commentsList[1].resolvedTime = 123;
+      if (invalid === 'type') store.commentsList[1].trackedChangeType = 'delete';
+      const { result, calls } = countRowUpdates(() => publishTracked(rows, trackedPublication(rows, 2)));
+      expect(result.ok).toBe(true);
+      expect(calls).toBe(1);
+      expect(store.commentsList).toHaveLength(2);
+      expect(store.commentsList[1].trackedChangeText).toBe('second');
+      expect(store.commentsList[1].trackedChangeType).toBe('insert');
+    },
+  );
+
+  it('keeps retained rows live and preserves canonical pruning for complete refreshes', () => {
+    const rows = [trackedParams('first')];
+    expect(publishTracked(rows, trackedPublication(rows, 1)).ok).toBe(true);
+    const next = trackedPublication(rows, 2);
+    store.committedReviewPresentations = { 'doc-1': next };
+    const previous = trackedPublication(rows, 1);
+    const reconcile = (pruneStale) =>
+      store.reconcileTrackedChangesFromV2({
+        superdoc,
+        adapter: trackedChangesAdapter,
+        documentId: 'doc-1',
+        items: [],
+        preparedParams: rows,
+        preparedPresentation: next,
+        previousPreparedPresentation: previous,
+        pruneStale,
+      });
+    const retained = countRowUpdates(() => reconcile(false));
+    expect(retained.calls).toBe(0);
+    expect([...retained.result.liveIds]).toEqual(['first']);
+    expect([...retained.result.liveAnchorKeys]).toEqual(['tc::body::first']);
+    store.commentsList.push(makeTrackedChangeRow({ commentId: 'stale' }));
+    const foreign = makeTrackedChangeRow({ commentId: 'foreign', fileId: 'doc-2' });
+    store.commentsList.push(foreign);
+    const complete = countRowUpdates(() => reconcile(true));
+    expect(complete.calls).toBe(1);
+    expect(store.commentsList.map((row) => row.commentId)).toEqual(['first', 'foreign']);
+    expect(store.commentsList[1]).toBe(foreign);
+  });
+
   it('retains unchanged presentation identity for a catalog-aware host patch', () => {
     const presentation = {
       catalogVersion: 1,

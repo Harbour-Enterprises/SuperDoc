@@ -36,6 +36,8 @@ import { textReceiptToSDReceipt } from '../receipt-bridge.js';
 // Text replacement input (new shape)
 // ---------------------------------------------------------------------------
 
+export type TextReplacementGranularity = 'word' | 'phrase' | 'range';
+
 /** Text replacement input: uses SelectionTarget / ref, or the complete main body. */
 export type TextReplaceInput =
   | {
@@ -44,6 +46,7 @@ export type TextReplaceInput =
       text: string;
       /** Require this exact selected text before replacing a single-paragraph text selection. */
       expectedText?: string;
+      replacementGranularity?: TextReplacementGranularity;
       /** Target a specific document story (body, header, footer, footnote, endnote). */
       in?: StoryLocator;
     }
@@ -52,12 +55,14 @@ export type TextReplaceInput =
       target?: never;
       text: string;
       expectedText?: never;
+      replacementGranularity?: never;
       in?: StoryLocator;
     }
   | {
       target: BodyStoryLocator;
       text: string;
       expectedText?: never;
+      replacementGranularity?: never;
       ref?: never;
       in?: never;
     };
@@ -121,7 +126,7 @@ export type ReplaceInput =
 // Allowlists
 // ---------------------------------------------------------------------------
 
-const TEXT_REPLACE_ALLOWED_KEYS = new Set(['text', 'target', 'ref', 'in', 'expectedText']);
+const TEXT_REPLACE_ALLOWED_KEYS = new Set(['text', 'target', 'ref', 'in', 'expectedText', 'replacementGranularity']);
 const STRUCTURAL_REPLACE_ALLOWED_KEYS = new Set(['content', 'target', 'ref', 'nestingPolicy', 'in']);
 const RICH_REPLACE_ALLOWED_KEYS = new Set(['value', 'type', 'target', 'ref', 'nestingPolicy', 'in']);
 const RICH_REPLACE_TYPES = new Set(['html', 'markdown']);
@@ -274,6 +279,9 @@ export function validateReplaceInput(input: unknown, options?: ReplaceExecutionO
     validateRichContentReplaceInput(input);
   } else {
     validateTextReplaceInput(input, options?.replaceMode === 'contents');
+    if (input.replacementGranularity !== undefined && options?.changeMode !== 'tracked') {
+      throw new DocumentApiValidationError('INVALID_INPUT', 'replacementGranularity requires changeMode: "tracked".');
+    }
   }
 }
 
@@ -336,6 +344,24 @@ function validateTextReplaceInput(input: Record<string, unknown>, contents = fal
   assertNoUnknownFields(input, TEXT_REPLACE_ALLOWED_KEYS, 'replace', 'doc.replace');
   validateTargetLocator(input, 'replace', contents);
   validateBodyReplaceShape(input);
+
+  if (input.replacementGranularity !== undefined) {
+    const target = input.target;
+    if (
+      !['word', 'phrase', 'range'].includes(input.replacementGranularity as string) ||
+      !isSelectionTarget(target) ||
+      target.start.kind !== 'text' ||
+      target.end.kind !== 'text' ||
+      target.start.blockId !== target.end.blockId ||
+      target.coordinateSpace === 'tracked'
+    ) {
+      throw new DocumentApiValidationError(
+        'INVALID_INPUT',
+        'replacementGranularity must be word, phrase, or range and requires an explicit single-paragraph text selection in visible coordinates.',
+        { field: 'replacementGranularity' },
+      );
+    }
+  }
 
   if (input.expectedText !== undefined) {
     const target = input.target;
@@ -488,6 +514,9 @@ export function executeReplace(
         text: textInput.text,
         in: textInput.in,
         ...(textInput.expectedText !== undefined ? { expectedText: textInput.expectedText } : {}),
+        ...(textInput.replacementGranularity !== undefined
+          ? { replacementGranularity: textInput.replacementGranularity }
+          : {}),
       }
     : { kind: 'replace' as const, ref: textInput.ref!, text: textInput.text, in: textInput.in };
   const textReceipt = selectionAdapter.execute(request, normalizeTextMutationOptions(options));

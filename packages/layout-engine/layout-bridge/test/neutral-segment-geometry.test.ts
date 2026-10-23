@@ -501,6 +501,138 @@ describe('collectSegmentGeometry', () => {
     expect(frag.lines[1].segments[0]!.width).toBe(20);
   });
 
+  it.each([
+    {
+      name: 'measured first-line indent',
+      indent: { left: 12, right: 8, firstLine: 48 },
+      maxWidth: 412,
+      left: 60,
+      width: 412,
+    },
+    {
+      name: 'fallback first-line indent',
+      indent: { left: 12, right: 8, firstLine: 48 },
+      maxWidth: undefined,
+      left: 60,
+      width: 412,
+    },
+    { name: 'zero first-line indent', indent: { left: 12, right: 8 }, maxWidth: 460, left: 12, width: 460 },
+    {
+      name: 'measured hanging indent',
+      indent: { left: 36, right: 8, hanging: 24 },
+      maxWidth: 460,
+      left: 12,
+      width: 460,
+    },
+    {
+      name: 'fallback hanging indent',
+      indent: { left: 36, right: 8, hanging: 24 },
+      maxWidth: undefined,
+      left: 12,
+      width: 460,
+    },
+    {
+      name: 'narrow measured wrap',
+      indent: { left: 12, right: 8, firstLine: 48 },
+      maxWidth: 300,
+      left: 60,
+      width: 300,
+    },
+  ])('keeps justified $name geometry inside the measured text width', ({ indent, maxWidth, left, width }) => {
+    const block = paragraphBlock('measured-indent', [textRun('aa bb ', 1), textRun('cc dd', 7)], {
+      alignment: 'justify',
+      indent,
+    });
+    const lines = [
+      makeLine({
+        toChar: 6,
+        width: 60,
+        maxWidth,
+        segments: [{ runIndex: 0, fromChar: 0, toChar: 6, width: 60 }],
+      }),
+      makeLine({
+        fromRun: 1,
+        toRun: 1,
+        toChar: 5,
+        width: 50,
+        maxWidth: 480 - indent.left - indent.right,
+        segments: [{ runIndex: 1, fromChar: 0, toChar: 5, width: 50 }],
+      }),
+    ];
+    const layout = singlePageLayout([paraFragment({ blockId: 'measured-indent', x: 40, width: 480, toLine: 2 })]);
+
+    const geometry = collectSegmentGeometry(layout, [block], [paragraphMeasure(lines)]).fragments[0]!;
+    const first = geometry.lines[0]!;
+    expect(first.contentLeft).toBe(40 + left);
+    expect(first.contentWidth).toBe(width);
+    expect(first.segments[0]!.x + first.segments[0]!.width).toBe(40 + left + width);
+    expect(first.contentLeft + first.contentWidth).toBeLessThanOrEqual(40 + 480 - indent.right);
+    expect(first.segments[0]).toMatchObject({ runIndex: 0, fromChar: 0, toChar: 6 });
+
+    expect(geometry.lines[1]!.contentLeft).toBe(40 + indent.left);
+    expect(geometry.lines[1]!.contentWidth).toBe(50);
+    expect(geometry.lines[1]!.segments[0]).toMatchObject({ runIndex: 1, fromChar: 0, toChar: 5, width: 50 });
+  });
+
+  it('uses the measured width for justified list text after its rendered marker', () => {
+    const block = paragraphBlock('measured-list', [textRun('aa bb ', 1), textRun('cc', 7)], {
+      alignment: 'justify',
+      indent: { left: 48, hanging: 24 },
+      numberingProperties: { numId: 5, level: 0 },
+    } as ParagraphAttrs);
+    const first = makeLine({
+      toChar: 6,
+      width: 60,
+      maxWidth: 300,
+      segments: [{ runIndex: 0, fromChar: 0, toChar: 6, width: 60 }],
+    });
+    const last = makeLine({ fromRun: 1, toRun: 1, toChar: 2, width: 20 });
+    const fragment = paraFragment({
+      blockId: 'measured-list',
+      width: 480,
+      toLine: 2,
+      markerWidth: 12,
+      markerTextWidth: 12,
+    });
+    const geometry = collectSegmentGeometry(
+      singlePageLayout([fragment]),
+      [block],
+      [paragraphMeasure([first, last], { markerWidth: 12, markerTextWidth: 12 })],
+    ).fragments[0]!;
+
+    expect(geometry.lines[0]!.contentLeft).toBe(48);
+    expect(geometry.lines[0]!.contentWidth).toBe(300);
+    expect(geometry.lines[0]!.segments[0]!.x + geometry.lines[0]!.segments[0]!.width).toBe(348);
+  });
+
+  it('keeps explicit tab positions and natural text width when justification is disabled', () => {
+    const block = paragraphBlock('indented-tabs', [textRun('aa bb ', 1), textRun('cc', 7)], {
+      alignment: 'justify',
+      indent: { left: 12, right: 8, firstLine: 48 },
+    });
+    const line = makeLine({
+      toChar: 6,
+      width: 210,
+      maxWidth: 300,
+      hasExplicitTabStops: true,
+      segments: [
+        { runIndex: 0, fromChar: 0, toChar: 3, width: 30 },
+        { runIndex: 0, fromChar: 3, toChar: 6, width: 30, x: 180 },
+      ],
+    });
+    const geometry = collectSegmentGeometry(
+      singlePageLayout([paraFragment({ blockId: 'indented-tabs', width: 480 })]),
+      [block],
+      [paragraphMeasure([line])],
+    ).fragments[0]!;
+
+    expect(geometry.lines[0]!.contentWidth).toBe(210);
+    expect(geometry.lines[0]!.segments).toMatchObject([
+      { x: 60, width: 30 },
+      { x: 240, width: 30 },
+    ]);
+  });
+
   it('stretches segment width, not just x, for inter-character (no-space, e.g. CJK) justify boundaries inside a segment', () => {
     // "ABCDEF" (no spaces) is line 1, split into two segments of 3 chars each,
     // not the true last line ("X" alone is line 2). An inter-character

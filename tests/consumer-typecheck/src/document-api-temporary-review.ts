@@ -23,7 +23,7 @@ async function temporaryReview() {
   });
   const id: string = receipt.temporary.id;
   const tag: string = receipt.temporary.tag;
-  const nativeEditPolicy: 'cancel' | undefined = receipt.temporary.onNativeEdit;
+  const nativeEditPolicy: 'cancel' | 'preserve' | undefined = receipt.temporary.onNativeEdit;
   const cancellation: 'native-edit' | undefined = receipt.temporary.cancelledBy;
   void nativeEditPolicy;
   void cancellation;

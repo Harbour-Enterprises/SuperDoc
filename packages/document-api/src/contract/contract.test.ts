@@ -1083,6 +1083,18 @@ describe('document-api contract catalog', () => {
     expect(get.properties!.after.properties).toHaveProperty('structural');
   });
 
+  it('keeps enriched text/replacement target coordinates optional and closed', () => {
+    const schemas = buildInternalContractSchemas();
+    const output = schemas.operations['trackChanges.get'].output as ContractTestSchemaShape;
+    for (const kind of ['text', 'replacement']) {
+      const branch = output.properties!.target.oneOf!.find((value) => value.properties!.kind.enum?.[0] === kind)!;
+      expect(branch.properties!.coordinateSpace).toEqual({ $ref: '#/$defs/TextCoordinateSpace' });
+      expect(branch.required).not.toContain('coordinateSpace');
+      expect(branch.additionalProperties).toBe(false);
+    }
+    expect(schemas.$defs!.TextCoordinateSpace).toEqual({ enum: ['visible', 'tracked'] });
+  });
+
   it('requires id on comments.create success receipts', () => {
     const schemas = buildInternalContractSchemas();
     const createOutputSchema = schemas.operations['comments.create'].output as {

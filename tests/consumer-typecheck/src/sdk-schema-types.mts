@@ -60,4 +60,5 @@ const change = await document.trackChanges.get({ id: 'synthetic' });
 if (change.target?.kind === 'text' || change.target?.kind === 'replacement') {
   change.target.segments?.[0]?.range.start satisfies number | undefined;
   change.target.story?.kind satisfies 'story' | undefined;
+  change.target.coordinateSpace satisfies 'visible' | 'tracked' | undefined;
 }

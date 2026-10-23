@@ -199,7 +199,7 @@ const receiptSuccessMetadataProperties: Record<string, JsonSchema> = {
       id: { type: 'string' },
       phase: { enum: ['begin', 'replace', 'rollback', 'commit'] },
       tag: { type: 'string' },
-      onNativeEdit: { const: 'cancel', type: 'string' },
+      onNativeEdit: { enum: ['cancel', 'preserve'], type: 'string' },
       cancelledBy: { const: 'native-edit', type: 'string' },
     },
     ['id', 'phase', 'tag'],
@@ -2673,6 +2673,7 @@ const trackChangeTargetSchema: JsonSchema = {
         address: trackedChangeAddressSchema,
         segments: { type: 'array', items: ref('TextSegment'), minItems: 1 },
         story: storyLocatorSchema,
+        coordinateSpace: ref('TextCoordinateSpace'),
       },
       ['kind', 'address'],
     ),
@@ -2682,6 +2683,7 @@ const trackChangeTargetSchema: JsonSchema = {
         address: trackedChangeAddressSchema,
         segments: { type: 'array', items: ref('TextSegment'), minItems: 1 },
         story: storyLocatorSchema,
+        coordinateSpace: ref('TextCoordinateSpace'),
       },
       ['kind', 'address'],
     ),
@@ -4822,7 +4824,7 @@ const diffApplyResultSchema: JsonSchema = objectSchema(
 );
 const temporaryHandleProperties = { previewId: { type: 'string', minLength: 1 }, expectedRevision: { type: 'string' } };
 const temporaryProgramProperties = {
-  onNativeEdit: { const: 'cancel', type: 'string' },
+  onNativeEdit: { enum: ['cancel', 'preserve'], type: 'string' },
   tag: { type: 'string', minLength: 1 },
   expectedRevision: { type: 'string' },
   operations: {
@@ -4831,7 +4833,7 @@ const temporaryProgramProperties = {
     maxItems: 200,
     items: objectSchema(
       {
-        operation: { enum: ['insert', 'replace', 'delete', 'trackChanges.decide', 'comments.create'] },
+        operation: { enum: ['insert', 'replace', 'delete', 'blocks.delete', 'trackChanges.decide', 'comments.create'] },
         input: { type: 'object' },
         options: { type: 'object' },
       },
@@ -4870,7 +4872,9 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     failure: preApplyFailureResultSchemaFor('mutations.rollbackTemporary'),
   },
   'mutations.commitTemporary': {
-    input: objectSchema(temporaryHandleProperties, ['previewId']),
+    input: objectSchema({ ...temporaryHandleProperties, operations: temporaryProgramProperties.operations }, [
+      'previewId',
+    ]),
     output: temporaryReceiptSchema,
     success: temporaryReceiptSchema,
     failure: preApplyFailureResultSchemaFor('mutations.commitTemporary'),
@@ -5173,6 +5177,11 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
                   type: 'string',
                   description:
                     'Require exact selected text before mutation. Only explicit single-paragraph text selections support this guard.',
+                },
+                replacementGranularity: {
+                  enum: ['word', 'phrase', 'range'],
+                  description:
+                    'Tracked revision boundaries for an explicit single-paragraph text selection. word (default) preserves matching tokens; phrase joins edits separated only by spaces; range replaces the complete selection. Requires changeMode: tracked.',
                 },
               },
               ['target', 'text'],

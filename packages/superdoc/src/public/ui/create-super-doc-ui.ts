@@ -852,8 +852,12 @@ const trackedChangeIdContextCache = new WeakMap<readonly unknown[], TrackedChang
  */
 function readTrackChangeProvenanceIds(item: unknown): string[] {
   const out: string[] = [];
+  const seen = new Set<string>();
   const push = (value: unknown): void => {
-    if (typeof value === 'string' && value.length > 0 && !out.includes(value)) out.push(value);
+    if (typeof value === 'string' && value.length > 0 && !seen.has(value)) {
+      seen.add(value);
+      out.push(value);
+    }
   };
   const scan = (rec: unknown): void => {
     if (!rec || typeof rec !== 'object') return;
@@ -923,7 +927,7 @@ function buildTrackedChangeIdContext(items: readonly unknown[]): TrackedChangeId
     aliasesFor(publicId) {
       const out: string[] = [publicId];
       for (const [alias, canonical] of canonicalByAlias) {
-        if (canonical === publicId && !out.includes(alias)) out.push(alias);
+        if (canonical === publicId && alias !== publicId) out.push(alias);
       }
       return out;
     },
@@ -2895,25 +2899,37 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const existing = uiTrackedChangesCatalogState.inFlight;
     if (existing?.generation === generation) return existing.promise;
     const signal = uiTrackedChangesCatalogState.abortController.signal;
-    const validateResult = (result: LooseRecord | undefined): LooseRecord | undefined => {
+    const validateResult = (result: unknown): unknown => {
+      const record = isPlainObject(result) ? result : undefined;
       if (
         signal.aborted ||
         generation !== uiTrackedChangesCatalogState.generation ||
-        result?.reason === 'review-hydration-superseded'
+        record?.reason === 'review-hydration-superseded'
       ) {
         throw new Error('ui-review-catalog-superseded');
       }
+      if (record?.ok === false) {
+        throw new Error(typeof record.reason === 'string' ? record.reason : 'ui-review-catalog-read-failed');
+      }
       return result;
     };
-    const rawResult = (listTrackedChanges as AnyFn).call(v2TrackedChanges, {
-      blocking: false,
-      signal,
-    }) as LooseRecord | PromiseLike<LooseRecord | undefined> | undefined;
+    let rawResult: unknown;
+    try {
+      rawResult = (listTrackedChanges as AnyFn).call(v2TrackedChanges, { blocking: false, signal });
+    } catch (error) {
+      return Promise.reject(error);
+    }
     // Keep a synchronous bridge result synchronous so an already-loaded
     // catalog can canonicalize a story-scoped document click immediately.
     // Worker-backed reads still use the shared cancellable promise below.
-    if (!isPromiseLike(rawResult)) return validateResult(rawResult);
-    const promise = Promise.resolve(rawResult as PromiseLike<LooseRecord | undefined>).then(validateResult);
+    if (!isPromiseLike(rawResult)) {
+      try {
+        return validateResult(rawResult);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+    const promise = Promise.resolve(rawResult).then(validateResult);
     uiTrackedChangesCatalogState.inFlight = { generation, promise };
     void promise.then(
       () => {
@@ -12528,7 +12544,12 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
               : null;
         if (segments) {
           const story = (rawTarget as TextTarget | TextAddress).story;
-          target = { kind: 'text', segments, ...(story ? { story } : {}) };
+          target = {
+            kind: 'text',
+            segments,
+            ...(asTarget.coordinateSpace ? { coordinateSpace: asTarget.coordinateSpace } : {}),
+            ...(story ? { story } : {}),
+          };
         }
       }
 

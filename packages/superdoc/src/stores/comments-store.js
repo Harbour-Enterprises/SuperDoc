@@ -5069,9 +5069,29 @@ export const useCommentsStore = defineStore('comments', () => {
         const paramsList = Array.isArray(preparedParams)
           ? preparedParams
           : items.map((item) => adapter.mapV2TrackedChangeToCommentParams(item));
+        const previousCoordinate = previousPreparedPresentation?.coordinate;
+        const coordinate = preparedPresentation?.coordinate;
+        const retainUnchangedRows =
+          !pruneStale &&
+          previousCoordinate &&
+          coordinate &&
+          coordinate.documentEpoch === preparedPresentation.epoch &&
+          coordinate.documentEpoch === previousPreparedPresentation.epoch &&
+          coordinate.documentEpoch === previousCoordinate.documentEpoch &&
+          typeof coordinate.mountId === 'string' &&
+          coordinate.mountId.length > 0 &&
+          coordinate.mountId === previousCoordinate.mountId &&
+          preparedPresentation.baseVersion === previousPreparedPresentation.version &&
+          preparedPresentation.version === preparedPresentation.baseVersion + 1 &&
+          coordinate.reviewVersion === preparedPresentation.version &&
+          previousCoordinate.reviewVersion === previousPreparedPresentation.version &&
+          Number.isSafeInteger(coordinate.commitSequence) &&
+          Number.isSafeInteger(previousCoordinate.commitSequence) &&
+          coordinate.commitSequence >= previousCoordinate.commitSequence;
         try {
           for (const params of paramsList) {
             if (!params) continue;
+            let retainUnchangedRow = false;
             if (preparedPresentation) {
               if (preparedPresentation !== committedReviewPresentations.value[String(effectiveDocumentId)]) continue;
               if (params.documentId != null && String(params.documentId) !== String(effectiveDocumentId)) continue;
@@ -5104,6 +5124,19 @@ export const useCommentsStore = defineStore('comments', () => {
                 row.trackedChangeCanonicalId = params.trackedChangeCanonicalId;
                 row.updateIdentityValues?.({ trackedChangeCanonicalId: params.trackedChangeCanonicalId });
               }
+              retainUnchangedRow =
+                retainUnchangedRows &&
+                row?.trackedChange === true &&
+                previousPreparedPresentation.rowVersions?.[id] === version &&
+                row.trackedChangeCanonicalId === params.trackedChangeCanonicalId &&
+                row.trackedChangeType === params.trackedChangeType &&
+                row.trackedChangeDisplayType === params.trackedChangeDisplayType &&
+                getTrackedChangeStoryKey(row) ===
+                  parseTrackedChangeAnchorKey(params.trackedChangeAnchorKey)?.storyKey &&
+                !row.resolvedTime &&
+                !row.resolvedById &&
+                !row.resolvedByEmail &&
+                !row.resolvedByName;
             }
             // TCS Phase 0 / 005 §5: adapters may surface canonical v2 types that
             // do not map to a Phase 0 dialog variant (`move` / `structural` /
@@ -5122,6 +5155,8 @@ export const useCommentsStore = defineStore('comments', () => {
             if (params.trackedChangeAnchorKey != null) {
               liveAnchorKeys.add(String(params.trackedChangeAnchorKey));
             }
+
+            if (retainUnchangedRow) continue;
             // Reuse the existing tracked-change comment synthesis path. It maps
             // params → useComment row, threads child comments, and emits the
             // sidebar update event consistent with v1 behavior.

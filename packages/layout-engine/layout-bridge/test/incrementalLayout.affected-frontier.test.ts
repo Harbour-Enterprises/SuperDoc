@@ -302,6 +302,112 @@ describe('canonical pagination preparation lifecycle', () => {
   });
 });
 
+describe('ordinary local-text convergence probe budgets', () => {
+  beforeEach(() => measureCache.clear());
+
+  const emptyNotes = { ...options, footnotes: { refs: [], blocksById: new Map() } };
+  function ordinaryReuse(before: FlowBlock[], after: FlowBlock[], layout: Layout) {
+    return {
+      ...provedReuse(before, after, layout),
+      maxRelaidPages: 3,
+      dirtyBlockIds: ['p0'],
+      pmShift: { atChar: 7, delta: 1 },
+      provedDirtyRegion: {
+        firstDirtyIndex: 0,
+        lastStableIndex: -1,
+        insertedBlockIds: [],
+        deletedBlockIds: [],
+        changedBlockIds: ['p0'],
+        stableBlockIds: new Set(after.filter((block) => block.id !== 'p0').map((block) => block.id)),
+      },
+      dependencyProof: {
+        profile: 'page-checkpoint-local-text' as const,
+        blockIdsUnchanged: true as const,
+        blockIdsUnique: true as const,
+        globalDependenciesAbsent: false as const,
+        globalDependenciesFencedByPageCheckpoint: true as const,
+        admittedDependencyClasses: ['footnotes' as const],
+        renderInputsUnchanged: true as const,
+        pageReferencesAbsent: true as const,
+        multiColumnSectionsProvedNonBalanceable: true as const,
+      },
+    };
+  }
+
+  it.each([true, false])(
+    'keeps the smaller probe scoped to its ordinary checkpoint proof (qualified=%s)',
+    async (qualified) => {
+      const before = documentBlocks(160);
+      const previous = await incrementalLayout([], null, before, emptyNotes, async (block) => measureFor(block));
+      const after = replaceParagraphText(before, 0, 'text-0!');
+      const incremental = await incrementalLayout(
+        before,
+        previous.layout,
+        after,
+        emptyNotes,
+        async (block) => measureFor(block),
+        undefined,
+        previous.measures,
+        undefined,
+        undefined,
+        qualified
+          ? ordinaryReuse(before, after, previous.layout)
+          : {
+              ...ordinaryReuse(before, after, previous.layout),
+              dependencyProof: provedReuse(before, after, previous.layout).dependencyProof,
+            },
+      );
+      const cold = await incrementalLayout([], null, after, emptyNotes, async (block) => measureFor(block));
+      expect(incremental.layoutReuse.mode, JSON.stringify(incremental.layoutReuse)).toBe('tail-splice');
+      expect(incremental.bridgeTiming.counters.paginationPasses).toBe(1);
+      expect(incremental.layoutReuse.pagesPaginated).toBe(qualified ? 3 : 4);
+      expect(json(incremental.layout)).toEqual(json(cold.layout));
+    },
+  );
+
+  it.each([600, 1000])('keeps the wider retry inside the shared budget for %s paragraphs', async (count) => {
+    const before: FlowBlock[] = documentBlocks(count);
+    before.splice(74, 0, { kind: 'pageBreak', id: 'fixed-boundary', attrs: { source: 'pageBreakBefore' } });
+    const measure = async (block: FlowBlock): Promise<Measure> =>
+      block.kind === 'pageBreak' ? { kind: 'pageBreak' } : measureFor(block);
+    const previous = await incrementalLayout([], null, before, emptyNotes, measure);
+    const after = before.map((block) =>
+      block.kind === 'paragraph'
+        ? paragraph(
+            block.id,
+            block.id === 'p0' ? 'text-0!' : block.runs[0]!.text,
+            block.runs[0]!.pmStart! + (block.id === 'p0' ? 0 : 1),
+          )
+        : block,
+    );
+    const editedMeasure = async (block: FlowBlock): Promise<Measure> =>
+      block.id === 'p0' ? measureWithLines(block, 2) : measure(block);
+    const incremental = await incrementalLayout(
+      before,
+      previous.layout,
+      after,
+      emptyNotes,
+      editedMeasure,
+      undefined,
+      previous.measures,
+      undefined,
+      undefined,
+      ordinaryReuse(before, after, previous.layout),
+    );
+    const cold = await incrementalLayout([], null, after, emptyNotes, editedMeasure);
+    expect(json(incremental.layout)).toEqual(json(cold.layout));
+    expect(incremental.bridgeTiming.counters.paginationPasses, JSON.stringify(incremental.layoutReuse)).toBe(3);
+    if (count === 1000) {
+      expect(incremental.layoutReuse.convergencePageIndex).toBeGreaterThan(16);
+      expect(incremental.layoutReuse.pagesPaginated).toBeLessThan(100);
+      expect(incremental.layoutReuse.tailDisposition).toBe('adopted-source-tail');
+    } else {
+      expect(incremental.layoutReuse.pagesPaginated).toBeGreaterThan(previous.layout.pages.length);
+      expect(incremental.layoutReuse.pagesPaginated).toBeLessThanOrEqual(previous.layout.pages.length * 1.25);
+    }
+  });
+});
+
 describe('contiguous paragraph-range layout reuse', () => {
   beforeEach(() => measureCache.clear());
 

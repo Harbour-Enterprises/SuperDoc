@@ -406,6 +406,8 @@ export type TrackChangeTarget =
       segments?: TextTarget['segments'];
       /** Story containing the resolved geometry. */
       story?: TextTarget['story'];
+
+      coordinateSpace?: TextTarget['coordinateSpace'];
     }
   | {
       kind: 'replacement';
@@ -414,6 +416,8 @@ export type TrackChangeTarget =
       segments?: TextTarget['segments'];
       /** Story containing the resolved geometry. */
       story?: TextTarget['story'];
+
+      coordinateSpace?: TextTarget['coordinateSpace'];
     }
   | {
       kind: 'formatting';

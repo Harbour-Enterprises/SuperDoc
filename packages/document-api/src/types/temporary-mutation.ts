@@ -12,14 +12,14 @@ export type TemporaryMutationOperation =
   | TemporaryCall<'insert', DocumentApiSurface['insert']>
   | TemporaryCall<'replace', DocumentApiSurface['replace']>
   | TemporaryCall<'delete', DocumentApiSurface['delete']>
+  | TemporaryCall<'blocks.delete', DocumentApiSurface['blocks']['delete']>
   | TemporaryCall<'trackChanges.decide', DocumentApiSurface['trackChanges']['decide']>
   | TemporaryCall<'comments.create', DocumentApiSurface['comments']['create']>;
 
 export interface TemporaryMutationInput {
   /** Host tag echoed on every temporary mutation and its rollback/commit receipt. */
   tag: string;
-  /** Cancel before native editor input or caret placement; omitted keeps the exclusive editing lease. */
-  onNativeEdit?: 'cancel';
+  onNativeEdit?: 'cancel' | 'preserve';
   expectedRevision?: string;
   operations: TemporaryMutationOperation[];
 }
@@ -27,13 +27,18 @@ export interface TemporaryMutationHandleInput {
   previewId: string;
   expectedRevision?: string;
 }
+export interface TemporaryMutationCommitInput extends TemporaryMutationHandleInput {
+  /** Run against the displayed document atomically before publishing its single Undo entry. */
+  operations?: TemporaryMutationOperation[];
+}
 export type TemporaryMutationReplaceInput = TemporaryMutationInput & TemporaryMutationHandleInput;
 /**
- * Temporary receipts use the original session baseline for semantic ref and
+ * Exclusive and cancel-on-edit receipts use the original session baseline for semantic ref and
  * text-shift coordinates. On `replace`, restore the baseline anchor snapshot
  * before applying the new receipt; do not compose its shifts onto the prior
  * displayed choice. On `rollback`, restore the baseline snapshot. The revision
  * pair still describes the actual previously displayed and next document.
+ * Preserve-on-edit receipts describe the current transition, including manual edits.
  */
 export interface TemporaryMutationMetadata {
   id: string;
@@ -41,7 +46,7 @@ export interface TemporaryMutationMetadata {
   /** Present when native editor interaction canceled the preview. */
   cancelledBy?: 'native-edit';
   tag: string;
-  onNativeEdit?: 'cancel';
+  onNativeEdit?: 'cancel' | 'preserve';
 }
 export type TemporaryMutationReceipt = ReceiptSuccess & {
   temporary: TemporaryMutationMetadata;

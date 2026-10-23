@@ -5849,17 +5849,15 @@ async function incrementalLayoutComplete(
             pages: createPageSequenceWithReplacements(layout.pages, localPageReplacements),
           };
         };
+
+        const retainedNotePageUnchanged = (pageIndex: number) =>
+          pageIndex < checkpointPageIndex! || (adoption != null && pageIndex >= adoption.sourcePageStartIndex);
         const retainedFootnoteAssignmentAdoptable =
           retainedFootnotePlaneBaseAdoptable &&
-          adoption != null &&
           retainedFootnoteAssignment != null &&
           retainedFootnoteAssignment.assignedNoteIdCount === retainedFootnoteAssignment.noteIdCount &&
-          retainedFootnoteAssignment.referencePageIndexes.every(
-            (pageIndex) => pageIndex < checkpointPageIndex! || pageIndex >= adoption!.sourcePageStartIndex,
-          ) &&
-          [...previousNotePageIndexes].every(
-            (pageIndex) => pageIndex < checkpointPageIndex! || pageIndex >= adoption!.sourcePageStartIndex,
-          );
+          retainedFootnoteAssignment.referencePageIndexes.every(retainedNotePageUnchanged) &&
+          [...previousNotePageIndexes].every(retainedNotePageUnchanged);
         if (retainedFootnoteAssignmentAdoptable) {
           footnoteAssignmentReferencesReused += retainedFootnoteAssignment.referenceCount;
           adoptRetainedFootnotePlane();
@@ -9180,9 +9178,20 @@ async function layoutWithOptionalReuse(input: {
   // continuation). Expand inside this bridge call until an exact retained-tail
   // boundary is proved or the exact current suffix is freshly paginated. No
   // intermediate probe escapes to resolve or paint.
-  const requestedRelaidPageHorizon = Number.isFinite(reuse.maxRelaidPages)
+  const smallOrdinaryProbe =
+    reuse.dependencyProof?.profile === 'page-checkpoint-local-text' &&
+    input.relayoutProvedPrefixToDocumentEndOnBoundedConvergenceFailure === true &&
+    !input.preparedCoupled &&
+    !input.progressive &&
+    !sameInvocationReserveRelayout &&
+    !paginationPrefix &&
+    !pendingRestart &&
+    !isBoundedRenderDiagnosticRetry;
+  const configuredRelaidPageHorizon = Number.isFinite(reuse.maxRelaidPages)
     ? Math.max(1, Math.floor(reuse.maxRelaidPages!))
     : 3;
+
+  const requestedRelaidPageHorizon = smallOrdinaryProbe ? 1 : configuredRelaidPageHorizon;
   const canConvergeBeforeBalancedSections =
     scopedBalanceableStartPage != null && sourceAffectedFrontierPageIndex < scopedBalanceableStartPage;
   const balanceableFencePageHorizon =
@@ -9340,7 +9349,10 @@ async function layoutWithOptionalReuse(input: {
       : undefined;
     const localPaginationPageCap =
       reuse.dependencyProof?.profile === 'page-checkpoint-local-text'
-        ? Math.max(6, sourceAffectedFrontierPageIndex - checkpointPageIndex + maxRelaidPages + 2)
+        ? Math.max(
+            smallOrdinaryProbe ? 2 : 6,
+            sourceAffectedFrontierPageIndex - checkpointPageIndex + maxRelaidPages + 2,
+          )
         : Math.max(4, sourceAffectedFrontierPageIndex - checkpointPageIndex + maxRelaidPages + 1);
     const suffixFootnotesInput = isFootnotesLayoutInput(input.options.footnotes)
       ? input.preparedCoupled
@@ -9874,6 +9886,25 @@ async function layoutWithOptionalReuse(input: {
           tailAdoption: null,
         },
       };
+    }
+
+    const ordinaryRetryPageHorizon = convergenceProbePageHorizon < 16 ? 16 : 64;
+    const ordinaryRetryPageCost = sourceAffectedFrontierPageIndex - checkpointPageIndex + ordinaryRetryPageHorizon + 2;
+    if (
+      !input.preparedCoupled &&
+      input.relayoutProvedPrefixToDocumentEndOnBoundedConvergenceFailure === true &&
+      !sameInvocationReserveRelayout &&
+      !paginationPrefix &&
+      !pendingRestart &&
+      !isBoundedRenderDiagnosticRetry &&
+      !terminalSuffixRelayoutAttempted &&
+      convergenceProbePageHorizon < 64 &&
+      ordinaryRetryPageCost * 4 <= previousPages.length - checkpointPageIndex &&
+      (ordinaryRetryPageHorizon === 16 ||
+        (reuseProbePagesPaginated + ordinaryRetryPageCost) * 4 <= previousPages.length - checkpointPageIndex)
+    ) {
+      convergenceProbePageHorizon = ordinaryRetryPageHorizon;
+      continue;
     }
 
     if (
@@ -12952,7 +12983,22 @@ function* applyLocalizedSectionNumberingSteps(
   let priorSectionIndex: number | null = null;
   let sectionPageNumber = 0;
   let displayNumber = 0;
-  for (let pageIndex = 0; pageIndex < endPageIndexExclusive; pageIndex += 1) {
+  let firstPageIndex = 0;
+
+  const predecessor = startPageIndex > 0 ? layout.pages[startPageIndex - 1] : undefined;
+  if (
+    predecessor &&
+    Number.isInteger(predecessor.sectionPageNumber) &&
+    predecessor.sectionPageNumber! > 0 &&
+    Number.isInteger(predecessor.displayNumber) &&
+    predecessor.displayNumber! > 0
+  ) {
+    priorSectionIndex = predecessor.sectionIndex ?? 0;
+    sectionPageNumber = predecessor.sectionPageNumber!;
+    displayNumber = predecessor.displayNumber!;
+    firstPageIndex = startPageIndex;
+  }
+  for (let pageIndex = firstPageIndex; pageIndex < endPageIndexExclusive; pageIndex += 1) {
     if (checkpointEveryBlocks != null && pageIndex % checkpointEveryBlocks === 0) {
       yield { phase: 'numbering-context:page', index: pageIndex, total: endPageIndexExclusive };
     }

@@ -33,12 +33,30 @@ export function flowBlocksContainCrossReferenceMetadata(
   blocks: readonly FlowBlock[],
   kind?: CrossReferenceMetadata['kind'],
 ): boolean {
-  return collectParagraphs(blocks).some((entry) =>
-    entry.paragraph.runs.some((run) => {
-      const metadata = asTextRun(run)?.crossReferenceMetadata;
-      return metadata != null && (kind == null || metadata.kind === kind);
-    }),
-  );
+  const contains = (block: FlowBlock): boolean => {
+    if (block.kind === 'paragraph')
+      return (block as ParagraphBlock).runs.some((run) => {
+        const metadata = asTextRun(run)?.crossReferenceMetadata;
+        return metadata != null && (kind == null || metadata.kind === kind);
+      });
+    if (block.kind === 'list') return ((block as ListBlock).items ?? []).some((item) => contains(item.paragraph));
+    if (block.kind === 'table')
+      return ((block as TableBlock).rows ?? []).some((row) =>
+        (row.cells ?? []).some((cell) =>
+          cell.blocks ? cell.blocks.some(contains) : !!cell.paragraph && contains(cell.paragraph),
+        ),
+      );
+    if (block.kind === 'drawing') {
+      const drawing = block as DrawingBlock;
+      return (
+        drawing.drawingKind === 'textboxShape' &&
+        Array.isArray(drawing.contentBlocks) &&
+        drawing.contentBlocks.some(contains)
+      );
+    }
+    return false;
+  };
+  return blocks.some(contains);
 }
 
 type ParagraphEntry = {
@@ -141,14 +159,30 @@ export function resolveLiveCrossReferences(bodyBlocks: FlowBlock[]): boolean {
   const paragraphs = collectParagraphs(bodyBlocks);
   const groups = collectFieldRunGroups(paragraphs).filter((group) => group.paragraphOrders.size === 1);
   if (!groups.length) return false;
-  const bookmarks = collectBookmarks(paragraphs);
-  const paragraphNumbers = collectFullContextParagraphNumbers(paragraphs);
-  const styleCandidates = collectStyleCandidates(paragraphs);
-  const noteReferences = collectBookmarkedNoteReferenceMarkers(paragraphs);
+  const bookmarks = groups.some(({ metadata }) => metadata.kind === 'ref')
+    ? collectBookmarks(paragraphs)
+    : new Map<string, BookmarkValue>();
+  const numberTargets = new Set(
+    groups.flatMap(({ metadata }) => {
+      const target =
+        metadata.kind === 'ref' && /\\w\b/i.test(metadata.instruction)
+          ? bookmarks.get(metadata.target)?.paragraph
+          : null;
+      return target ? [target] : [];
+    }),
+  );
+  const paragraphNumbers = numberTargets.size
+    ? collectFullContextParagraphNumbers(paragraphs, numberTargets)
+    : new Map<ParagraphBlock, string>();
+  const styleCandidates = groups.some(({ metadata }) => metadata.kind !== 'ref' && metadata.kind !== 'noteRef')
+    ? collectStyleCandidates(paragraphs)
+    : [];
+  const noteReferences = groups.some(({ metadata }) => metadata.kind === 'noteRef')
+    ? collectBookmarkedNoteReferenceMarkers(paragraphs)
+    : new Map<string, { text: string; paragraphOrder: number }>();
   let changed = false;
 
   for (const group of groups) {
-    // A field result spanning paragraphs carries paragraph structure that a
     // text-run substitution cannot reproduce. Preserve its imported cache
     // until a structure-aware field-result projector owns that case.
     if (group.paragraphOrders.size > 1) continue;
@@ -267,10 +301,17 @@ function projectParagraphResult(paragraph: ParagraphBlock, content: string, inst
   return content;
 }
 
-function collectFullContextParagraphNumbers(paragraphs: readonly ParagraphEntry[]): Map<ParagraphBlock, string> {
+function collectFullContextParagraphNumbers(
+  paragraphs: readonly ParagraphEntry[],
+  targets: ReadonlySet<ParagraphBlock>,
+): Map<ParagraphBlock, string> {
   const result = new Map<ParagraphBlock, string>();
   const levelsByNumberingId = new Map<number, string[]>();
-  for (const { paragraph } of paragraphs) {
+
+  let lastTarget = paragraphs.length - 1;
+  while (lastTarget >= 0 && !targets.has(paragraphs[lastTarget]!.paragraph)) lastTarget--;
+  for (let index = 0; index <= lastTarget; index++) {
+    const { paragraph } = paragraphs[index]!;
     const numbering = paragraph.attrs?.numberingProperties;
     const markerText = paragraph.attrs?.wordLayout?.marker?.markerText ?? '';
     const numId = numbering?.numId;
@@ -279,12 +320,18 @@ function collectFullContextParagraphNumbers(paragraphs: readonly ParagraphEntry[
 
     const levels = levelsByNumberingId.get(numId) ?? [];
     levels.length = level + 1;
-    const parentNumber = levels.slice(0, level).reverse().find(Boolean) ?? '';
+    let parentNumber = '';
+    for (let parent = level - 1; parent >= 0; parent--) {
+      if (levels[parent]) {
+        parentNumber = levels[parent]!;
+        break;
+      }
+    }
     const fullContextNumber =
       parentNumber && !markerText.startsWith(parentNumber) ? `${parentNumber}${markerText}` : markerText;
     levels[level] = fullContextNumber;
     levelsByNumberingId.set(numId, levels);
-    result.set(paragraph, fullContextNumber);
+    if (targets.has(paragraph)) result.set(paragraph, fullContextNumber);
   }
   return result;
 }

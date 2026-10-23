@@ -1,12 +1,14 @@
 import type {
   TemporaryMutationInput,
   TemporaryMutationHandleInput,
+  TemporaryMutationCommitInput,
   TemporaryMutationReplaceInput,
   TemporaryMutationReceipt,
 } from './types/temporary-mutation.js';
 export type {
   TemporaryMutationInput,
   TemporaryMutationHandleInput,
+  TemporaryMutationCommitInput,
   TemporaryMutationReplaceInput,
   TemporaryMutationReceipt,
   TemporaryMutationMetadata,
@@ -1882,6 +1884,7 @@ export { isStructuralInsertInput } from './insert/insert.js';
 export type {
   ReplaceInput,
   TextReplaceInput,
+  TextReplacementGranularity,
   RichContentReplaceInput,
   ReplaceMutationOptions,
   NativeOoxmlReplaceInput,
@@ -1966,7 +1969,7 @@ export interface MutationsApi {
   beginTemporary(input: TemporaryMutationInput): Promise<TemporaryMutationReceipt>;
   replaceTemporary(input: TemporaryMutationReplaceInput): Promise<TemporaryMutationReceipt>;
   rollbackTemporary(input: TemporaryMutationHandleInput): Promise<TemporaryMutationReceipt>;
-  commitTemporary(input: TemporaryMutationHandleInput): Promise<TemporaryMutationReceipt>;
+  commitTemporary(input: TemporaryMutationCommitInput): Promise<TemporaryMutationReceipt>;
   preview(input: MutationsPreviewInput): Promise<MutationsPreviewOutput>;
   /**
    * Apply an atomic plan. `options` is host-side cancellation and is not part
@@ -1987,7 +1990,7 @@ export interface MutationsAdapter {
   beginTemporary?(input: TemporaryMutationInput): Promise<TemporaryMutationReceipt>;
   replaceTemporary?(input: TemporaryMutationReplaceInput): Promise<TemporaryMutationReceipt>;
   rollbackTemporary?(input: TemporaryMutationHandleInput): Promise<TemporaryMutationReceipt>;
-  commitTemporary?(input: TemporaryMutationHandleInput): Promise<TemporaryMutationReceipt>;
+  commitTemporary?(input: TemporaryMutationCommitInput): Promise<TemporaryMutationReceipt>;
   preview(input: MutationsPreviewInput): Promise<MutationsPreviewOutput>;
   apply(input: MutationsApplyInput): Promise<PlanReceipt>;
 }
@@ -4099,7 +4102,7 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
           );
         return method.call(adapters.mutations, input);
       },
-      commitTemporary(input: TemporaryMutationHandleInput): Promise<TemporaryMutationReceipt> {
+      commitTemporary(input: TemporaryMutationCommitInput): Promise<TemporaryMutationReceipt> {
         const method = adapters.mutations.commitTemporary;
         if (!method)
           return Promise.reject(

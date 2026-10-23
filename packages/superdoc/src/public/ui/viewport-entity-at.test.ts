@@ -1194,6 +1194,29 @@ describe('trackChanges.setActive — story-aware activation + all-story pre-warm
     ui.destroy();
   });
 
+  it.each(['visible', 'tracked'] as const)(
+    'preserves %s coordinates through public viewport scrolling',
+    async (coordinateSpace) => {
+      const scrollTargetIntoView = vi.fn(async () => ({ success: true }));
+      const { superdoc } = makeHitStub(document.createElement('span'), [], undefined, { scrollTargetIntoView });
+      const ui = createSuperDocUI({ superdoc });
+      const target = {
+        kind: 'text' as const,
+        coordinateSpace,
+        story: { kind: 'story' as const, storyType: 'body' as const },
+        segments: [{ blockId: 'review', range: { start: 0, end: 10 } }] as [
+          { blockId: string; range: { start: number; end: number } },
+        ],
+      };
+      try {
+        expect(await ui.viewport.scrollIntoView({ target, behavior: 'instant' })).toEqual({ success: true });
+        expect(scrollTargetIntoView).toHaveBeenCalledWith({ target, block: 'center', behavior: 'instant' });
+      } finally {
+        ui.destroy();
+      }
+    },
+  );
+
   it('keeps the requested tracked change active when scroll resolves the target but cannot make it visible', async () => {
     const scrollTargetIntoView = vi.fn(async () => ({ success: false, reason: SUPERDOC_UI_REASONS.targetNotVisible }));
     const target = { kind: 'text', segments: [{ blockId: 'p-next', range: { start: 0, end: 1 } }] };

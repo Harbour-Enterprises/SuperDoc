@@ -11,6 +11,7 @@
 import type { SelectionTarget, DeleteBehavior, TargetLocator } from './types/address.js';
 import type { TextMutationReceipt } from './types/receipt.js';
 import type { TextMutationOptions } from './write/write.js';
+import type { TextReplacementGranularity } from './replace/replace.js';
 import type { InlineRunPatch } from './format/inline-run-patch.js';
 import type { StoryLocator } from './types/story.types.js';
 import type { FormatReadSelectionRequest, FormatReadSelectionResult } from './format/read-selection.js';
@@ -35,6 +36,7 @@ export type SelectionReplaceRequest = TargetLocator & {
   text: string;
   /** Exact selected-text precondition for an explicit single-paragraph selection. */
   expectedText?: string;
+  replacementGranularity?: TextReplacementGranularity;
   /** Story locator threaded from the operation input's `in` field. */
   in?: StoryLocator;
 };
