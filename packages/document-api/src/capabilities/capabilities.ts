@@ -74,7 +74,7 @@ export interface PlanEngineCapabilities {
   unsupported?: readonly { cell: string; reason: string }[];
   /** Non-uniform style resolution strategies available for `onNonUniform`. */
   supportedNonUniformStrategies: readonly string[];
-  /** Mark names that `setMarks` can override (e.g., 'bold', 'italic'). */
+  /** Mark names supported by setMarks; consult unsupported for step-specific restrictions. */
   supportedSetMarks: readonly string[];
   /** Regex selector limits enforced by the selector engine. Unsafe patterns are rejected. */
   regex: {

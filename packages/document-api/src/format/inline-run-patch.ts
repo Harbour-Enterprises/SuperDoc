@@ -107,6 +107,22 @@ export interface InlineRunPatch {
 
 export type InlineRunPatchKey = keyof InlineRunPatch;
 
+export const CLEAR_INLINE_FORMATTING_KEYS = Object.freeze([
+  'bold',
+  'italic',
+  'underline',
+  'strike',
+  'color',
+  'highlight',
+  'fontFamily',
+  'fontSize',
+  'vertAlign',
+  'smallCaps',
+  'caps',
+  'letterSpacing',
+  'dstrike',
+] as const satisfies readonly InlineRunPatchKey[]);
+
 interface InlinePropertyCarrierMark {
   storage: 'mark';
   markName: 'bold' | 'italic' | 'underline' | 'strike' | 'highlight' | 'textStyle';

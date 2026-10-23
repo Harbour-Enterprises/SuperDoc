@@ -1221,6 +1221,7 @@ export type {
   StylisticSetPatch,
 } from './format/inline-run-patch.js';
 export {
+  CLEAR_INLINE_FORMATTING_KEYS,
   INLINE_PROPERTY_REGISTRY,
   INLINE_PROPERTY_KEY_SET,
   INLINE_PROPERTY_BY_KEY,

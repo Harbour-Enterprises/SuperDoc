@@ -119,6 +119,7 @@ import { getParagraphInlineDirection } from '@superdoc/contracts';
 import { isPlainObject } from '../../helpers/object-guards.js';
 import type { SurfaceHandle } from '../../core/types/index.js';
 import {
+  CLEAR_INLINE_FORMATTING_KEYS,
   INLINE_PROPERTY_BY_KEY,
   isStoryLocator,
   type InlineRunPatchKey,
@@ -2090,21 +2091,9 @@ function inlineFormatMethod(descriptor: CommandDescriptor): string | null {
 }
 
 /** Inline run-property keys cleared by `clear-formatting` via `format.apply`. */
-const CLEAR_INLINE_PATCH: Readonly<Record<string, null>> = {
-  bold: null,
-  italic: null,
-  underline: null,
-  strike: null,
-  color: null,
-  highlight: null,
-  fontFamily: null,
-  fontSize: null,
-  vertAlign: null,
-  smallCaps: null,
-  caps: null,
-  letterSpacing: null,
-  dstrike: null,
-};
+const CLEAR_INLINE_PATCH: Readonly<Record<string, null>> = Object.fromEntries(
+  CLEAR_INLINE_FORMATTING_KEYS.map((key) => [key, null]),
+);
 
 /**
  * Subset of `CLEAR_INLINE_PATCH` whose registry entry supports tracked
