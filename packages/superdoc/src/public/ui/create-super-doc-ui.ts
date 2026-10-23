@@ -12743,21 +12743,20 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   let searchState: SearchSnapshot = { ...SEARCH_UNAVAILABLE_SLICE };
   const searchListeners = new Set<(slice: SearchSnapshot) => void>();
 
-  const getHostSearch = (): LooseRecord | null => {
-    const host = getHost();
-    const search = host?.search;
-    return search && typeof search === 'object' ? (search as LooseRecord) : null;
+  const getHostSearch = (): Record<string, unknown> | null => {
+    const search = getHost()?.search;
+    return isPlainObject(search) ? search : null;
   };
-  const getEditCommandSearch = (): LooseRecord | null => {
+  const getEditCommandSearch = (): Record<string, unknown> | null => {
     const editCommands = getEditCommands();
     const search = editCommands?.search;
-    return search && typeof search === 'object' ? (search as LooseRecord) : null;
+    return isPlainObject(search) ? search : null;
   };
   const searchIsAvailable = (): boolean => {
     const search = getHostSearch();
     if (search && typeof search.setSession === 'function') return true;
     const editSearch = getEditCommandSearch();
-    return Boolean(editSearch) && typeof editSearch!.query === 'function' && typeof editSearch!.getState === 'function';
+    return editSearch !== null && typeof editSearch.query === 'function' && typeof editSearch.getState === 'function';
   };
   const emitSearch = (): void => {
     for (const listener of [...searchListeners]) {
@@ -12790,7 +12789,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   let pendingFallbackGeneration: number | null = null;
   // A completed fallback remains reusable only until the document, editor or
   // query changes. The shell's snapshot alone cannot prove those boundaries.
-  let completedFallbackSearch: LooseRecord | null = null;
+  let completedFallbackSearch: Record<string, unknown> | null = null;
 
   /**
    * How to tear down the session that is currently open, captured when it was
@@ -12946,7 +12945,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     shellFallbackOutstanding = false;
     const editSearch = getEditCommandSearch();
     if (editSearch && typeof editSearch.query === 'function') {
-      safeCall<unknown>(() => editSearch.query({ query: '' }), null);
+      safeCall<unknown>(() => hostMethod(editSearch, 'query')?.({ query: '' }), null);
     }
   };
   const readEditCommandCanReplace = (): boolean =>
@@ -12992,7 +12991,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       const editSearch = getEditCommandSearch();
       if (editSearch && typeof editSearch.getState === 'function') {
         const editSnapshot = normalizeHostSearchResult(
-          safeCall<unknown>(() => editSearch.getState(), null),
+          safeCall<unknown>(() => hostMethod(editSearch, 'getState')?.(), null),
           readEditCommandCanReplace(),
           readEditCommandCanReplaceAll(),
         );
@@ -13025,7 +13024,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       };
       return searchState;
     }
-    const snapshot = normalizeHostSearchResult(safeCall<unknown>(() => host.getState(), null));
+    const snapshot = normalizeHostSearchResult(safeCall<unknown>(() => hostMethod(host, 'getState')?.(), null));
     if (!snapshot) return searchState;
     searchState = {
       ...searchState,
@@ -13133,11 +13132,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         // whatever the current editor exposes.
         const host = getHostSearch();
         if (host && typeof host.clear === 'function') {
-          safeCall<unknown>(() => host.clear(), null);
+          safeCall<unknown>(() => hostMethod(host, 'clear')?.(), null);
         } else {
           const editSearch = getEditCommandSearch();
           if (editSearch && typeof editSearch.query === 'function') {
-            safeCall<unknown>(() => editSearch.query({ query: '' }), null);
+            safeCall<unknown>(() => hostMethod(editSearch, 'query')?.({ query: '' }), null);
           }
         }
       }
@@ -13209,10 +13208,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
           // the empty string rather than by `clear()`. Captured for the same
           // reason as the host path: this facade belongs to the current editor.
           releaseActiveSearchSession = () => {
-            editSearch.query({ query: '' });
+            hostMethod(editSearch, 'query')?.({ query: '' });
           };
           const result = safeCall<unknown>(
-            () => editSearch.query({ query, caseSensitive, includeDeletedText, regex }),
+            () => hostMethod(editSearch, 'query')?.({ query, caseSensitive, includeDeletedText, regex }),
             null,
           );
           if (isPromiseLike(result)) {
@@ -13248,7 +13247,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
           completedFallbackSearch = editSearch;
           applyHostSearchResult(result, readEditCommandCanReplace(), readEditCommandCanReplaceAll());
           applyHostSearchResult(
-            safeCall<unknown>(() => editSearch.getState(), null),
+            safeCall<unknown>(() => hostMethod(editSearch, 'getState')?.(), null),
             readEditCommandCanReplace(),
             readEditCommandCanReplaceAll(),
           );
@@ -13277,11 +13276,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       // Capture how to release this session while the host is still reachable;
       // an active-editor change has to close it after `activeEditor` has moved on.
       releaseActiveSearchSession = () => {
-        if (typeof host.clear === 'function') host.clear();
+        hostMethod(host, 'clear')?.();
       };
       const result = safeCall<unknown>(
         () =>
-          host.setSession(query, {
+          hostMethod(host, 'setSession')?.(query, {
             caseSensitive,
             includeDeletedText,
             ...(regex ? { regex: true } : {}),
@@ -13304,10 +13303,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
           const releaseHostSession = releaseActiveSearchSession;
           releaseActiveSearchSession = () => {
             releaseHostSession?.();
-            editSearch.query({ query: '' });
+            hostMethod(editSearch, 'query')?.({ query: '' });
           };
           const commandResult = safeCall<unknown>(
-            () => editSearch.query({ query, caseSensitive, includeDeletedText, regex }),
+            () => hostMethod(editSearch, 'query')?.({ query, caseSensitive, includeDeletedText, regex }),
             null,
           );
           if (isPromiseLike(commandResult)) {
@@ -13328,7 +13327,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
             applyHostSearchResult(commandResult, readEditCommandCanReplace(), readEditCommandCanReplaceAll());
           }
           applyHostSearchResult(
-            safeCall<unknown>(() => editSearch.getState(), null),
+            safeCall<unknown>(() => hostMethod(editSearch, 'getState')?.(), null),
             readEditCommandCanReplace(),
             readEditCommandCanReplaceAll(),
           );
@@ -13345,7 +13344,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
           return { ok: false, reason: SUPERDOC_UI_REASONS.searchUnavailable };
         }
         if (searchState.total === 0) return { ok: false, reason: SUPERDOC_UI_REASONS.operationUnavailable };
-        const result = safeCall<unknown>(() => editSearch.next(), null);
+        const result = safeCall<unknown>(() => hostMethod(editSearch, 'next')?.(), null);
         if (isPromiseLike(result)) {
           // Navigation continues an existing session, so the token is read
           // rather than advanced. `close()`, an active-editor change and
@@ -13367,14 +13366,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
           applyHostSearchResult(result, readEditCommandCanReplace(), readEditCommandCanReplaceAll());
         }
         applyHostSearchResult(
-          safeCall<unknown>(() => editSearch.getState(), null),
+          safeCall<unknown>(() => hostMethod(editSearch, 'getState')?.(), null),
           readEditCommandCanReplace(),
           readEditCommandCanReplaceAll(),
         );
         return { ok: true };
       }
       if (searchState.total === 0) return { ok: false, reason: SUPERDOC_UI_REASONS.operationUnavailable };
-      applyHostSearchResult(safeCall<unknown>(() => host.next(), null));
+      applyHostSearchResult(safeCall<unknown>(() => hostMethod(host, 'next')?.(), null));
       return { ok: true };
     },
     previous: (): WorkflowActionResult => {
@@ -13385,7 +13384,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
           return { ok: false, reason: SUPERDOC_UI_REASONS.searchUnavailable };
         }
         if (searchState.total === 0) return { ok: false, reason: SUPERDOC_UI_REASONS.operationUnavailable };
-        const result = safeCall<unknown>(() => editSearch.previous(), null);
+        const result = safeCall<unknown>(() => hostMethod(editSearch, 'previous')?.(), null);
         if (isPromiseLike(result)) {
           // Navigation continues an existing session, so the token is read
           // rather than advanced. `close()`, an active-editor change and
@@ -13407,14 +13406,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
           applyHostSearchResult(result, readEditCommandCanReplace(), readEditCommandCanReplaceAll());
         }
         applyHostSearchResult(
-          safeCall<unknown>(() => editSearch.getState(), null),
+          safeCall<unknown>(() => hostMethod(editSearch, 'getState')?.(), null),
           readEditCommandCanReplace(),
           readEditCommandCanReplaceAll(),
         );
         return { ok: true };
       }
       if (searchState.total === 0) return { ok: false, reason: SUPERDOC_UI_REASONS.operationUnavailable };
-      applyHostSearchResult(safeCall<unknown>(() => host.previous(), null));
+      applyHostSearchResult(safeCall<unknown>(() => hostMethod(host, 'previous')?.(), null));
       return { ok: true };
     },
     clear: (): void => {
@@ -13427,11 +13426,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       cancelRefreshShellSearch();
       cancelOutstandingShellFallback();
       const host = getHostSearch();
-      if (host && typeof host.clear === 'function') safeCall<unknown>(() => host.clear(), null);
+      if (host && typeof host.clear === 'function') safeCall<unknown>(() => hostMethod(host, 'clear')?.(), null);
       if (!host || typeof host.clear !== 'function') {
         const editSearch = getEditCommandSearch();
         if (editSearch && typeof editSearch.query === 'function') {
-          safeCall<unknown>(() => editSearch.query({ query: '' }), null);
+          safeCall<unknown>(() => hostMethod(editSearch, 'query')?.({ query: '' }), null);
         }
       }
       setSearchState({
@@ -13455,7 +13454,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         }
         if (!readEditCommandCanReplace()) return { ok: false, reason: SUPERDOC_UI_REASONS.operationUnavailable };
         const result = safeCall<unknown>(
-          () => editSearch.replace({ replacement: typeof replacement === 'string' ? replacement : '' }),
+          () =>
+            hostMethod(editSearch, 'replace')?.({ replacement: typeof replacement === 'string' ? replacement : '' }),
           null,
         );
         if (isPromiseLike(result)) {
@@ -13509,7 +13509,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         return { ok: false, reason: SUPERDOC_UI_REASONS.operationUnavailable };
       }
       const result = safeCall<unknown>(
-        () => host.replaceCurrent(typeof replacement === 'string' ? replacement : ''),
+        () => hostMethod(host, 'replaceCurrent')?.(typeof replacement === 'string' ? replacement : ''),
         null,
       );
       return settleHostSearchReplacement(result);
@@ -13531,7 +13531,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
           };
         }
         const result = safeCall<unknown>(
-          () => editSearch.replaceAll({ replacement: typeof replacement === 'string' ? replacement : '' }),
+          () =>
+            hostMethod(editSearch, 'replaceAll')?.({ replacement: typeof replacement === 'string' ? replacement : '' }),
           null,
         );
         if (isPromiseLike(result)) {
@@ -13584,7 +13585,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       if (typeof host.replaceAll !== 'function') {
         return { ok: false, reason: SUPERDOC_UI_REASONS.operationUnavailable };
       }
-      const result = safeCall<unknown>(() => host.replaceAll(typeof replacement === 'string' ? replacement : ''), null);
+      const result = safeCall<unknown>(
+        () => hostMethod(host, 'replaceAll')?.(typeof replacement === 'string' ? replacement : ''),
+        null,
+      );
       return settleHostSearchReplacement(result);
     },
   };
@@ -13613,13 +13617,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       if (typeof editSearch?.refresh === 'function' && typeof editSearch.query === 'function') {
         const capturedSearch = editSearch;
         releaseRefreshShellSearch = () => {
-          capturedSearch.query({ query: '' });
+          hostMethod(capturedSearch, 'query')?.({ query: '' });
         };
       }
       const result =
         typeof editSearch?.refresh === 'function'
-          ? safeCall<unknown>(() => editSearch.refresh(input), null)
-          : safeCall<unknown>(() => host!.refresh(), null);
+          ? safeCall<unknown>(() => hostMethod(editSearch, 'refresh')?.(input), null)
+          : safeCall<unknown>(() => hostMethod(host, 'refresh')?.(), null);
       if (isPromiseLike(result)) {
         pendingFallbackGeneration = generation;
         setSearchState({ canReplace: false, canReplaceAll: false });
