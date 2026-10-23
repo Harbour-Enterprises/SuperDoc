@@ -3720,6 +3720,7 @@ describe('public ui — command reason taxonomy', () => {
       listStyle?: Record<string, unknown>;
       targetNodeType?: 'paragraph' | 'listItem';
       targetLockMode?: 'contentLocked' | 'sdtContentLocked';
+      withoutGetNode?: boolean;
     } = {},
   ) {
     const sourceRange = opts.sourceRange ?? { start: 0, end: 5 };
@@ -3802,28 +3803,40 @@ describe('public ui — command reason taxonomy', () => {
     const setStyle = vi.fn(() => ({ success: true }));
     const clearStyle = vi.fn(() => ({ success: true }));
     const applyListStyle = vi.fn(() => ({ success: true }));
-    const getNodeForInput = (input: { nodeId: string; story?: unknown }) => ({
-      node: {
-        kind: 'paragraph',
-        paragraph: {
-          styleRef: (input.nodeId === 'P1' ? opts.sourceStyleRef : opts.targetStyleRef) ?? null,
-          props: input.nodeId === 'P1' ? sourceParagraphProps : targetParagraphProps,
-          inlines: (input.nodeId === 'P1' ? sourceRuns : targetRuns).map((run) => ({
-            run: {
-              text: run.text,
-              props: run.props ?? {},
-            },
-          })),
+    const blockSources = {
+      P1: { props: sourceParagraphProps, runs: sourceRuns, styleRef: opts.sourceStyleRef ?? null },
+      rest: { props: targetParagraphProps, runs: targetRuns, styleRef: opts.targetStyleRef ?? null },
+    };
+    type BlockReader = { blockSources: typeof blockSources };
+    const getNodeForInput = (sources: typeof blockSources, input: { nodeId: string; story?: unknown }) => {
+      const block = input.nodeId === 'P1' ? sources.P1 : sources.rest;
+      return {
+        node: {
+          kind: 'paragraph',
+          paragraph: {
+            styleRef: block.styleRef,
+            props: block.props,
+            inlines: block.runs.map((run) => ({
+              run: {
+                text: run.text,
+                props: run.props ?? {},
+              },
+            })),
+          },
         },
-      },
-      address: {
-        nodeType: input.nodeId === 'P2' ? (opts.targetNodeType ?? 'paragraph') : 'paragraph',
-        nodeId: input.nodeId,
-        ...(input.story ? { story: input.story } : {}),
-      },
+        address: {
+          nodeType: input.nodeId === 'P2' ? (opts.targetNodeType ?? 'paragraph') : 'paragraph',
+          nodeId: input.nodeId,
+          ...(input.story ? { story: input.story } : {}),
+        },
+      };
+    };
+    const getNodeById = vi.fn(function (this: BlockReader, input: { nodeId: string }) {
+      return getNodeForInput(this.blockSources, input);
     });
-    const getNodeById = vi.fn((input: { nodeId: string }) => getNodeForInput(input));
-    const getNode = vi.fn((input: { nodeId: string; story?: unknown }) => getNodeForInput(input));
+    const getNode = vi.fn(function (this: BlockReader, input: { nodeId: string; story?: unknown }) {
+      return getNodeForInput(this.blockSources, input);
+    });
 
     const superdoc = makeDocSuperdoc({
       doc: baseDoc({
@@ -3837,7 +3850,8 @@ describe('public ui — command reason taxonomy', () => {
               },
             }
           : {}),
-        getNode,
+        blockSources,
+        ...(opts.withoutGetNode ? {} : { getNode }),
         getNodeById,
         ...(opts.queryMatch ? { query: { match: opts.queryMatch } } : {}),
         format: {
@@ -3886,6 +3900,8 @@ describe('public ui — command reason taxonomy', () => {
       setStyle,
       clearStyle,
       applyListStyle,
+      getNode,
+      getNodeById,
       setSelection(selection: Record<string, unknown>) {
         currentSelection = selection;
       },
@@ -4950,6 +4966,62 @@ describe('public ui — command reason taxonomy', () => {
         },
         { offsetSpace: 'selection' },
       ),
+    );
+  });
+
+  it('copy-format omits a direct mark that the effective read reports as mixed', async () => {
+    const { superdoc, apply, setSelection, targetSelection } = makeFormatPainterSuperdoc({
+      sourceRuns: [{ text: 'hello', props: { bold: true, color: '#D2003F' } }],
+      readEffectiveInlineUniformity: () => ({ success: true, values: { bold: { state: 'mixed' } } }),
+    });
+    const ui = createSuperDocUI({ superdoc });
+    expect(await ui.commands.executeAsync('copy-format')).toBe(true);
+    setSelection(targetSelection);
+    ui.formatPainter.notifyPointerUp();
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+    const inline = apply.mock.calls[0][0].inline;
+    expect(inline).not.toHaveProperty('bold');
+    expect(inline.color).toBe('#D2003F');
+  });
+
+  it('copy-format omits a direct mark whose effective entry is present but malformed', async () => {
+    const { superdoc, apply, setSelection, targetSelection } = makeFormatPainterSuperdoc({
+      sourceRuns: [{ text: 'hello', props: { bold: true, italic: true, color: '#D2003F' } }],
+      readEffectiveInlineUniformity: () => ({
+        success: true,
+        values: { bold: { state: 'uniform' }, italic: 'mixed' },
+      }),
+    });
+    const ui = createSuperDocUI({ superdoc });
+    expect(await ui.commands.executeAsync('copy-format')).toBe(true);
+    setSelection(targetSelection);
+    ui.formatPainter.notifyPointerUp();
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+    const inline = apply.mock.calls[0][0].inline;
+    expect(inline).not.toHaveProperty('bold');
+    expect(inline).not.toHaveProperty('italic');
+    expect(inline.color).toBe('#D2003F');
+  });
+
+  it('copy-format reads blocks through getNode and falls back to getNodeById', async () => {
+    const preferred = makeFormatPainterSuperdoc({ sourceParagraphProps: { alignment: 'center' } });
+    const preferredUi = createSuperDocUI({ superdoc: preferred.superdoc });
+    expect(await preferredUi.commands.executeAsync('copy-format')).toBe(true);
+    preferred.setSelection(preferred.targetSelection);
+    preferredUi.formatPainter.notifyPointerUp();
+    await vi.waitFor(() => expect(preferred.setAlignment).toHaveBeenCalled());
+    expect(preferred.getNode).toHaveBeenCalledWith(expect.objectContaining({ nodeId: 'P1' }));
+
+    const fallback = makeFormatPainterSuperdoc({ sourceParagraphProps: { alignment: 'center' }, withoutGetNode: true });
+    const fallbackUi = createSuperDocUI({ superdoc: fallback.superdoc });
+    expect(await fallbackUi.commands.executeAsync('copy-format')).toBe(true);
+    fallback.setSelection(fallback.targetSelection);
+    fallbackUi.formatPainter.notifyPointerUp();
+    await vi.waitFor(() =>
+      expect(fallback.setAlignment).toHaveBeenCalledWith({
+        target: { kind: 'block', nodeType: 'paragraph', nodeId: 'P2' },
+        alignment: 'center',
+      }),
     );
   });
 

@@ -464,6 +464,22 @@ function hostMethod(target: unknown, name: string): ((...args: unknown[]) => unk
   return typeof member === 'function' ? (...args: unknown[]): unknown => Reflect.apply(member, target, args) : null;
 }
 
+type EffectiveInlineUniformityState = { state: 'uniform'; value: string } | { state: 'mixed' | 'unresolvable' };
+
+function readEffectiveInlineUniformityStates(raw: unknown): Record<string, EffectiveInlineUniformityState> | null {
+  if (!isPlainObject(raw) || raw.success !== true) return null;
+  const states: Record<string, EffectiveInlineUniformityState> = {};
+  if (!isPlainObject(raw.values)) return states;
+  for (const [key, entry] of Object.entries(raw.values)) {
+    if (!entry) continue;
+    states[key] =
+      isPlainObject(entry) && entry.state === 'uniform' && typeof entry.value === 'string'
+        ? { state: 'uniform', value: entry.value }
+        : { state: isPlainObject(entry) && entry.state === 'mixed' ? 'mixed' : 'unresolvable' };
+  }
+  return states;
+}
+
 function hasAbortedFlag(value: unknown): value is { readonly aborted: boolean } {
   return isPlainObject(value) && typeof value.aborted === 'boolean';
 }
@@ -5277,16 +5293,17 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   const readEffectiveInlineUniformityCached = (
     selection: SelectionSlice,
     input = effectiveInlineUniformityInput(selection),
-  ): { value: LooseRecord | null; status: SliceStatus } => {
-    if (!input) return { value: null, status: 'ready' };
+  ): { value: Record<string, EffectiveInlineUniformityState> | null; status: SliceStatus } => {
+    const key = effectiveInlineUniformityCacheKey(selection, input);
+    if (!input || key === null) return { value: null, status: 'ready' };
     const doc = getDoc();
     const op = resolveDocOperation(doc, 'format.readEffectiveInlineUniformity');
     if (!op) return { value: null, status: 'ready' };
-    return readAsync<LooseRecord>(
-      effectiveInlineUniformityCacheKey(selection, input)!,
+    return readAsync(
+      key,
       contentToken(),
       () => op({ ...input, keys: EFFECTIVE_INLINE_UNIFORMITY_KEYS }),
-      (raw) => (raw && typeof raw === 'object' ? (raw as LooseRecord) : null),
+      readEffectiveInlineUniformityStates,
     );
   };
 
@@ -5297,12 +5314,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     values: Pick<ProjectedInlineSelectionValues, 'fontFamily' | 'fontSize'> | null;
     status: SliceStatus;
   } => {
-    const { value, status } = readEffectiveInlineUniformityCached(selection, input);
-    if (!value || value.success !== true) return { values: null, status };
-    const states = value.values as LooseRecord | undefined;
+    const { value: states, status } = readEffectiveInlineUniformityCached(selection, input);
+    if (!states) return { values: null, status };
     const uniform = (key: 'fontFamily' | 'fontSize'): string | undefined => {
-      const entry = states?.[key] as LooseRecord | undefined;
-      if (!entry || entry.state !== 'uniform' || typeof entry.value !== 'string') return undefined;
+      const entry = states[key];
+      if (entry?.state !== 'uniform') return undefined;
       return key === 'fontFamily' ? normalizeLayoutFontFamily(entry.value) : entry.value;
     };
     return {
@@ -5315,12 +5331,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   const resolveEffectiveMarkUniformityValues = (
     selection: SelectionSlice,
   ): { values: EffectiveMarkValues | null; status: SliceStatus } => {
-    const { value, status } = readEffectiveInlineUniformityCached(selection);
-    if (!value || value.success !== true) return { values: null, status };
-    const states = value.values as LooseRecord | undefined;
+    const { value: states, status } = readEffectiveInlineUniformityCached(selection);
+    if (!states) return { values: null, status };
     const values: EffectiveMarkValues = {};
     for (const key of EFFECTIVE_MARK_KEYS) {
-      const entry = states?.[key] as LooseRecord | undefined;
+      const entry = states[key];
       if (entry?.state === 'uniform' && (entry.value === 'true' || entry.value === 'false')) {
         values[key] = entry.value === 'true';
       }
@@ -5360,13 +5375,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     return status === 'ready' || (key != null && asyncReads.get(key)?.failedToken === contentToken());
   };
 
-  const readEffectiveInlineUniformityNow = async (input: LooseRecord | null): Promise<LooseRecord | null> => {
+  const readEffectiveInlineUniformityNow = async (
+    input: LooseRecord | null,
+  ): Promise<Record<string, EffectiveInlineUniformityState> | null> => {
     if (!input) return null;
     const op = resolveDocOperation(getDoc(), 'format.readEffectiveInlineUniformity');
     if (!op) return null;
     try {
-      const raw = await Promise.resolve(op(input));
-      return raw && typeof raw === 'object' && (raw as LooseRecord).success === true ? (raw as LooseRecord) : null;
+      return readEffectiveInlineUniformityStates(await Promise.resolve(op(input)));
     } catch {
       return null;
     }
@@ -5375,13 +5391,12 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   const applyEffectiveInlineUniformity = (
     projected: ProjectedInlineSelectionValues,
     direct: ProjectedInlineSelectionValues,
-    result: LooseRecord,
+    states: Record<string, EffectiveInlineUniformityState>,
   ): void => {
-    const states = result.values as LooseRecord | undefined;
     for (const key of ['fontFamily', 'fontSize'] as const) {
       if (direct[key] !== undefined) continue;
-      const entry = states?.[key] as LooseRecord | undefined;
-      if (entry?.state === 'uniform' && typeof entry.value === 'string') {
+      const entry = states[key];
+      if (entry?.state === 'uniform') {
         projected[key] = key === 'fontFamily' ? normalizeLayoutFontFamily(entry.value) : entry.value;
       } else {
         delete projected[key];
@@ -5414,14 +5429,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   const readFormatPainterInlineValues = async (selection: SelectionSlice): Promise<ProjectedInlineSelectionValues> => {
     const effectiveInput = effectiveInlineUniformityInput(selection);
     const doc = getDoc();
-    const query = doc?.query as LooseRecord | undefined;
+    const queryMatch = hostMethod(doc?.query, 'match');
     const request = selectionTextQueryRequest(selection);
-    if (typeof query?.match !== 'function' || !request) {
+    if (!queryMatch || !request) {
       return projectSelectionInlineValues(selection, effectiveInput);
     }
 
     try {
-      const raw = await Promise.resolve(query.match(request));
+      const raw = await Promise.resolve(queryMatch(request));
       const result = raw && typeof raw === 'object' ? (raw as LooseRecord) : null;
       const direct = projectInlineValuesFromQueryItem(pickSelectionTextQueryItem(result, selection), selection);
       const completed = completeProjectedInlineValues(selection, direct, effectiveInput);
@@ -5441,15 +5456,12 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   const readBlockNode = async (address: LooseRecord): Promise<LooseRecord | undefined> => {
     const doc = getDoc();
     if (!doc) return undefined;
-    if (typeof (doc as LooseRecord).getNode === 'function') {
-      return (await Promise.resolve((doc as LooseRecord).getNode(address))) as LooseRecord | undefined;
-    }
-    return (await Promise.resolve(
-      (doc as LooseRecord).getNodeById?.({
-        nodeId: address['nodeId'],
-        nodeType: address['nodeType'],
-      }),
-    )) as LooseRecord | undefined;
+    const getNode = hostMethod(doc, 'getNode');
+    const getNodeById = hostMethod(doc, 'getNodeById');
+    const raw = await Promise.resolve(
+      getNode ? getNode(address) : getNodeById?.({ nodeId: address['nodeId'], nodeType: address['nodeType'] }),
+    );
+    return isPlainObject(raw) ? raw : undefined;
   };
 
   /**
@@ -5459,14 +5471,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
    */
   const selectionQueryStatus = (selection: SelectionSlice): SliceStatus => {
     const doc = getDoc();
-    const query = doc?.query as LooseRecord | undefined;
-    if (typeof query?.match !== 'function') return 'ready';
+    const queryMatch = hostMethod(doc?.query, 'match');
+    if (!queryMatch) return 'ready';
     const request = selectionTextQueryRequest(selection);
     if (!request) return 'ready';
     const { status } = readAsync<LooseRecord>(
       `query:${selectionSignature(selection)}`,
       contentToken(),
-      () => query.match(request),
+      () => queryMatch(request),
       (raw) => (raw && typeof raw === 'object' ? (raw as LooseRecord) : null),
     );
     return status;
@@ -5657,12 +5669,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   };
 
   const hostCommandSupport = (command: string): LooseRecord | null => {
-    const host = getHost();
-    const capabilities = safeCall<LooseRecord | null>(
-      typeof host?.getCapabilities === 'function' ? () => host.getCapabilities() : undefined,
-      null,
-    );
-    const commands = capabilities?.editableSubset?.commands;
+    const getCapabilities = hostMethod(getHost(), 'getCapabilities');
+    const capabilities = safeCall<unknown>(getCapabilities ?? undefined, null);
+    const editableSubset = isPlainObject(capabilities) ? capabilities.editableSubset : undefined;
+    const commands = isPlainObject(editableSubset) ? editableSubset.commands : undefined;
     if (Array.isArray(commands)) {
       return (commands as LooseRecord[]).find((entry) => entry?.command === command || entry?.id === command) ?? null;
     }
@@ -10055,7 +10065,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         : null,
     );
     for (const [markName, patchKey] of Object.entries(MARK_TO_PATCH)) {
-      const entry = effective?.values?.[markName] as LooseRecord | undefined;
+      const entry = effective?.[markName];
       if (!entry) continue;
       if (entry.state === 'uniform' && (entry.value === 'true' || entry.value === 'false')) {
         inlinePatch[patchKey] = entry.value === 'true';
@@ -10068,8 +10078,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
     // getNode may expose text-only runs. Resolve highlight absence explicitly
     // rather than relying on raw target properties to discover its reset key.
-    const highlight = effective?.values?.highlight as LooseRecord | undefined;
-    if (highlight?.state === 'uniform' && typeof highlight.value === 'string') {
+    const highlight = effective?.highlight;
+    if (highlight?.state === 'uniform') {
       // Explicit none suppresses inherited highlighting; null would restore it.
       inlinePatch.highlight = highlight.value;
       mixedInlineKeys.delete('highlight');
