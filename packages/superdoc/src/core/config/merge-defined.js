@@ -19,7 +19,7 @@
  * Later sources win, as with spread. Non-object sources are ignored so callers
  * can pass a possibly-absent block without guarding first.
  *
- * @param {...(Record<string, unknown> | undefined)} sources
+ * @param {...unknown} sources
  * @returns {Record<string, unknown>}
  */
 export function mergeDefined(...sources) {

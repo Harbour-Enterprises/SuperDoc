@@ -32,6 +32,48 @@ import { firstDefined, mergeDefined } from './merge-defined.js';
 import { normalizeCommentsUiConfig } from '../../helpers/comment-small-screen.ts';
 import { TOOLBAR_ITEM_ALIASES } from '../../internal/toolbar/toolbar-item-aliases.js';
 import { isPlainObject } from '../../helpers/object-guards.js';
+import type { Config, Modules, UIConfig } from '../types/index.js';
+
+type UiConfigSource = Pick<
+  Config,
+  | 'ui'
+  | 'modules'
+  | 'toolbar'
+  | 'toolbarGroups'
+  | 'toolbarIcons'
+  | 'toolbarTexts'
+  | 'disableContextMenu'
+  | 'rulers'
+  | 'rulerContainer'
+>;
+
+type SurfaceContainer = string | HTMLElement | null;
+
+type NormalizedUiConfig = {
+  enabled: boolean;
+  toolbar: { enabled: boolean; container: SurfaceContainer; options: Record<string, unknown> };
+  comments: { enabled: boolean; options: Record<string, unknown> };
+  contextMenu: { enabled: boolean; suppressed: boolean; options: Record<string, unknown> };
+  loading: { enabled: boolean };
+  search: { enabled: boolean; options: Record<string, unknown> };
+  linkPopover: { enabled: boolean; suppressed: boolean; options: Record<string, unknown> };
+  ruler: { enabled: boolean; suppressed: boolean; container: SurfaceContainer };
+  contentControls: { enabled: boolean; options: Record<string, unknown> };
+};
+
+type LegacyToolbarOptions = Exclude<Modules['toolbar'], boolean | undefined>;
+
+type KeyAliases = Readonly<Record<string, string>>;
+
+type ToolbarItemSelectHandler = (context: Record<string, unknown>) => unknown;
+
+const isUnknownArray = (value: unknown): value is readonly unknown[] => Array.isArray(value);
+
+const isOptionsBag = <T>(value: T): value is Extract<T, object> & Record<string, unknown> => isPlainObject(value);
+
+const hasSelectHandler = (
+  item: Record<string, unknown>,
+): item is Record<string, unknown> & { onSelect: ToolbarItemSelectHandler } => typeof item.onSelect === 'function';
 
 /** Surfaces that render when the consumer says nothing at all. */
 const HISTORICAL_DEFAULTS = Object.freeze({
@@ -63,22 +105,31 @@ const DEFAULT_TOOLBAR_GROUP_IDS = Object.freeze(['left', 'center', 'right']);
 // Includes the two horizontal margin pixels on `ToolbarButton`. The rendered
 // width is derived from this same value below, so responsive layout never has
 // to guess from a custom label.
-const CUSTOM_TOOLBAR_ITEM_WIDTHS = Object.freeze({ compact: 32, default: 80, wide: 120 });
+const CUSTOM_TOOLBAR_ITEM_WIDTHS: Readonly<Record<string, number>> = Object.freeze({
+  compact: 32,
+  default: 80,
+  wide: 120,
+});
+
+type BuiltInSurface = keyof typeof HISTORICAL_DEFAULTS;
+
+type SurfaceOptions<K extends BuiltInSurface> = Partial<Extract<UIConfig[K], object>> & Record<string, unknown>;
+
+type ToolbarSurfaceOptions = SurfaceOptions<'toolbar'>;
+
+const isBuiltInSurface = (key: string): key is BuiltInSurface =>
+  Object.prototype.hasOwnProperty.call(HISTORICAL_DEFAULTS, key);
 
 /** Every built-in surface `ui: false` turns off. */
-const BUILT_IN_SURFACES = Object.freeze(Object.keys(HISTORICAL_DEFAULTS));
+const BUILT_IN_SURFACES = Object.freeze(Object.keys(HISTORICAL_DEFAULTS).filter(isBuiltInSurface));
 
 /**
  * Read a surface's enabled state from a `ui` block.
  *
  * `false` disables, `true` or an options object enables, and `undefined`
  * falls through to the historical default so partial configs stay additive.
- *
- * @param {Record<string, unknown> | undefined} ui
- * @param {string} key
- * @returns {boolean}
  */
-function resolveSurface(ui, key) {
+function resolveSurface(ui: UIConfig | undefined, key: BuiltInSurface): boolean {
   const value = ui?.[key];
   if (value === false) return false;
   if (value === undefined) return HISTORICAL_DEFAULTS[key];
@@ -87,14 +138,10 @@ function resolveSurface(ui, key) {
 
 /**
  * Per-surface options, if the consumer passed an object rather than a flag.
- *
- * @param {Record<string, unknown> | undefined} ui
- * @param {string} key
- * @returns {Record<string, unknown>}
  */
-function resolveOptions(ui, key) {
+function resolveOptions<K extends BuiltInSurface>(ui: UIConfig | undefined, key: K): SurfaceOptions<K> {
   const value = ui?.[key];
-  return isPlainObject(value) ? value : {};
+  return isOptionsBag(value) ? value : {};
 }
 
 /**
@@ -114,11 +161,8 @@ const COMMENT_POLICY_FIELDS = Object.freeze(['level', 'readOnly', 'allowResolve'
 
 /**
  * Drop policy fields from a presentation options bag.
- *
- * @param {Record<string, unknown>} options
- * @returns {Record<string, unknown>}
  */
-function withoutCommentPolicy(options) {
+function withoutCommentPolicy(options: Record<string, unknown>): Record<string, unknown> {
   if (!COMMENT_POLICY_FIELDS.some((field) => field in options)) return options;
   const presentation = { ...options };
   for (const field of COMMENT_POLICY_FIELDS) delete presentation[field];
@@ -132,11 +176,8 @@ function withoutCommentPolicy(options) {
  * precedence during partial migrations. For example, `ui.contextMenu.customItems`
  * must beat `modules.contextMenu.sections` even though the former uses the old
  * field name.
- *
- * @param {Record<string, unknown>} options
- * @returns {Record<string, unknown>}
  */
-function normalizeContextMenuOptions(options) {
+function normalizeContextMenuOptions(options: Record<string, unknown>): Record<string, unknown> {
   const normalized = { ...options };
   const sections = firstDefined(options.sections, options.customItems);
   const defaultItems = firstDefined(options.defaultItems, options.includeDefaultItems);
@@ -147,7 +188,7 @@ function normalizeContextMenuOptions(options) {
   return mergeDefined(normalized, { sections, defaultItems });
 }
 
-const SEARCH_STRING_KEYS = Object.freeze({
+const SEARCH_STRING_KEYS: KeyAliases = Object.freeze({
   findPlaceholder: 'findPlaceholder',
   findAriaLabel: 'findAriaLabel',
   replacePlaceholder: 'replacePlaceholder',
@@ -172,7 +213,7 @@ const SEARCH_STRING_KEYS = Object.freeze({
   invalidPattern: 'invalidPatternLabel',
 });
 
-function normalizeSearchStrings(strings) {
+function normalizeSearchStrings(strings: unknown): Record<string, unknown> {
   if (!isPlainObject(strings)) return {};
   return Object.fromEntries(
     Object.entries(strings)
@@ -181,7 +222,7 @@ function normalizeSearchStrings(strings) {
   );
 }
 
-function normalizeSearchOptions(options) {
+function normalizeSearchOptions(options: Record<string, unknown>): Record<string, unknown> {
   const normalized = { ...options };
   delete normalized.strings;
   delete normalized.replaceControls;
@@ -193,7 +234,7 @@ function normalizeSearchOptions(options) {
   });
 }
 
-const TOOLBAR_ICON_ALIASES = Object.freeze({
+const TOOLBAR_ICON_ALIASES: KeyAliases = Object.freeze({
   'text-color': 'color',
   'table-of-contents': 'tableOfContents',
   'page-number': 'pageNumber',
@@ -231,7 +272,7 @@ const TOOLBAR_ICON_ALIASES = Object.freeze({
   'formatting-marks': 'formattingMarks',
 });
 
-const TOOLBAR_STRING_ALIASES = Object.freeze({
+const TOOLBAR_STRING_ALIASES: KeyAliases = Object.freeze({
   'font-family': 'fontFamily',
   'font-size': 'fontSize',
   'highlight-color': 'highlight',
@@ -272,11 +313,11 @@ const TOOLBAR_STRING_ALIASES = Object.freeze({
   'linked-style': 'linkedStyles',
 });
 
-function mapToolbarKey(key, aliases) {
-  return aliases[key] ?? key;
+function mapToolbarKey<K>(key: K, aliases: KeyAliases): K | string {
+  return aliases[String(key)] ?? key;
 }
 
-function mapToolbarRecord(record, aliases) {
+function mapToolbarRecord(record: unknown, aliases: KeyAliases): Record<string, unknown> | undefined {
   if (!isPlainObject(record)) return undefined;
   const entries = Object.entries(record);
   const passthroughEntries = entries.filter(([key]) => aliases[key] === undefined);
@@ -286,19 +327,19 @@ function mapToolbarRecord(record, aliases) {
   );
 }
 
-function mapToolbarItems(items) {
-  if (!Array.isArray(items)) return items;
+function mapToolbarItems(items: unknown): unknown {
+  if (!isUnknownArray(items)) return items;
   return items.map((item) => mapToolbarKey(item, TOOLBAR_ITEM_ALIASES));
 }
 
-function mapToolbarRegions(regions) {
+function mapToolbarRegions(regions: unknown): unknown {
   if (!isPlainObject(regions)) return regions;
   return Object.fromEntries(Object.entries(regions).map(([region, items]) => [region, mapToolbarItems(items)]));
 }
 
-function addCustomItemRegions(regions, customItems) {
-  if (!isPlainObject(regions) || !Array.isArray(customItems)) return regions;
-  const result = { ...regions };
+function addCustomItemRegions(regions: unknown, customItems: ToolbarSurfaceOptions['customItems']): unknown {
+  if (!isPlainObject(regions) || !isUnknownArray(customItems)) return regions;
+  const result: Record<string, unknown> = { ...regions };
   for (const item of customItems) {
     if (!isPlainObject(item)) continue;
     const region = item.region ?? 'center';
@@ -314,15 +355,15 @@ const TOOLBAR_OPTIONAL_ITEM_REGIONS = Object.freeze({
   'table-of-contents': 'center',
 });
 
-function addIncludedToolbarItems(regions, includeItems) {
-  if (!isPlainObject(regions) || !Array.isArray(includeItems)) return regions;
+function addIncludedToolbarItems(regions: unknown, includeItems: ToolbarSurfaceOptions['includeItems']): unknown {
+  if (!isPlainObject(regions) || !isUnknownArray(includeItems)) return regions;
 
-  const result = Object.fromEntries(
-    Object.entries(regions).map(([region, items]) => [region, Array.isArray(items) ? [...items] : items]),
+  const result: Record<string, unknown> = Object.fromEntries(
+    Object.entries(regions).map(([region, items]) => [region, isUnknownArray(items) ? [...items] : items]),
   );
   const configuredItems = new Set(
     Object.values(result)
-      .flatMap((items) => (Array.isArray(items) ? items : []))
+      .flatMap((items) => (isUnknownArray(items) ? items : []))
       .map((item) => mapToolbarKey(item, TOOLBAR_ITEM_ALIASES)),
   );
 
@@ -331,20 +372,23 @@ function addIncludedToolbarItems(regions, includeItems) {
     if (configuredItems.has(mappedItem)) continue;
     const region = TOOLBAR_OPTIONAL_ITEM_REGIONS[item];
     if (!region) continue;
-    if (!Array.isArray(result[region])) result[region] = [];
-    result[region].push(item);
+    const regionItems = result[region];
+    result[region] = isUnknownArray(regionItems) ? [...regionItems, item] : [item];
     configuredItems.add(mappedItem);
   }
 
   return result;
 }
 
-function extendToolbarRegions(regions, options) {
+function extendToolbarRegions(
+  regions: unknown,
+  options: Pick<ToolbarSurfaceOptions, 'includeItems' | 'customItems'>,
+): unknown {
   return addCustomItemRegions(addIncludedToolbarItems(regions, options.includeItems), options.customItems);
 }
 
-function mapToolbarFontOptions(options) {
-  if (!Array.isArray(options)) return options;
+function mapToolbarFontOptions(options: ToolbarSurfaceOptions['fontOptions']): unknown {
+  if (!isUnknownArray(options)) return options;
   return options.map((option) => {
     if (!isPlainObject(option)) return option;
     const { value, label, previewFamily } = option;
@@ -357,14 +401,15 @@ function mapToolbarFontOptions(options) {
   });
 }
 
-function mapToolbarCustomItems(items) {
-  if (!Array.isArray(items)) return items;
+function mapToolbarCustomItems(items: unknown): unknown {
+  if (!isUnknownArray(items)) return items;
   return items.map((item) => {
     if (!isPlainObject(item) || typeof item.id !== 'string') return item;
 
     const size = item.size ?? 'default';
-    const layoutWidth = item.type === 'separator' ? undefined : CUSTOM_TOOLBAR_ITEM_WIDTHS[size];
-    const mapped = {
+    const layoutWidth = item.type === 'separator' ? undefined : CUSTOM_TOOLBAR_ITEM_WIDTHS[String(size)];
+    const style: {} | null | undefined = item.style;
+    const mapped: Record<string, unknown> = {
       ...item,
       name: item.id,
       group: item.region,
@@ -373,20 +418,21 @@ function mapToolbarCustomItems(items) {
       ...(layoutWidth
         ? {
             layoutWidth,
-            style: { ...item.style, width: `${layoutWidth - 2}px` },
+            style: { ...style, width: `${layoutWidth - 2}px` },
           }
         : {}),
     };
 
     if (item.label) {
       if (mapped.defaultLabel === undefined) mapped.defaultLabel = item.label;
+      const attributes: { ariaLabel?: unknown } = item.attributes ?? {};
       mapped.attributes = {
-        ...item.attributes,
-        ariaLabel: item.attributes?.ariaLabel ?? item.label,
+        ...attributes,
+        ariaLabel: attributes.ariaLabel ?? item.label,
       };
     }
 
-    if (item.type === 'dropdown' && Array.isArray(item.options)) {
+    if (item.type === 'dropdown' && isUnknownArray(item.options)) {
       mapped.options = item.options.map((option) => {
         if (!isPlainObject(option)) return option;
         return {
@@ -398,8 +444,8 @@ function mapToolbarCustomItems(items) {
       mapped.dropdownValueKey = 'value';
     }
 
-    if (typeof item.onSelect === 'function') {
-      mapped.command = ({ item: _item, argument, payload: _payload, ...context }) =>
+    if (hasSelectHandler(item)) {
+      mapped.command = ({ item: _item, argument, payload: _payload, ...context }: Record<string, unknown>) =>
         item.onSelect({ ...context, value: argument });
     }
 
@@ -411,7 +457,7 @@ function mapToolbarCustomItems(items) {
   });
 }
 
-function normalizeToolbarOptions(options) {
+function normalizeToolbarOptions(options: ToolbarSurfaceOptions): Record<string, unknown> {
   const normalized = { ...options };
   const configuredItems = firstDefined(options.items, isPlainObject(options.groups) ? options.groups : undefined);
   const items =
@@ -423,9 +469,9 @@ function normalizeToolbarOptions(options) {
     mapToolbarRecord(options.texts, {}),
     mapToolbarRecord(options.strings, TOOLBAR_STRING_ALIASES),
   );
-  const includeItems = Array.isArray(options.includeItems) ? new Set(options.includeItems) : null;
-  const itemIds = isPlainObject(items)
-    ? new Set(Object.values(items).flatMap((regionItems) => (Array.isArray(regionItems) ? regionItems : [])))
+  const includeItems = isUnknownArray(options.includeItems) ? new Set(options.includeItems) : null;
+  const itemIds: Set<unknown> = isPlainObject(items)
+    ? new Set(Object.values(items).flatMap((regionItems) => (isUnknownArray(regionItems) ? regionItems : [])))
     : new Set();
 
   delete normalized.items;
@@ -462,21 +508,8 @@ function normalizeToolbarOptions(options) {
 
 /**
  * Collapse a consumer config into the effective built-in UI profile.
- *
- * @param {Record<string, any>} [config] Raw consumer config.
- * @returns {{
- *   enabled: boolean,
- *   toolbar: { enabled: boolean, container: string | HTMLElement | null, options: Record<string, unknown> },
- *   comments: { enabled: boolean, options: Record<string, unknown> },
- *   contextMenu: { enabled: boolean, suppressed: boolean, options: Record<string, unknown> },
- *   loading: { enabled: boolean },
- *   search: { enabled: boolean, options: Record<string, unknown> },
- *   linkPopover: { enabled: boolean, suppressed: boolean, options: Record<string, unknown> },
- *   ruler: { enabled: boolean, suppressed: boolean, container: string | HTMLElement | null },
- *   contentControls: { enabled: boolean, options: Record<string, unknown> },
- * }}
  */
-export function normalizeUiConfig(config = {}) {
+export function normalizeUiConfig(config: UiConfigSource = {}): NormalizedUiConfig {
   const raw = config.ui;
 
   // `ui: false` is the only input that suppresses everything at once. An
@@ -484,15 +517,15 @@ export function normalizeUiConfig(config = {}) {
   const allDisabled = raw === false;
   const ui = isPlainObject(raw) ? raw : undefined;
 
-  const enabled = (key) => !allDisabled && resolveSurface(ui, key);
+  const enabled = (key: BuiltInSurface): boolean => !allDisabled && resolveSurface(ui, key);
   // `undefined` when the consumer said nothing about a surface, so a caller can
   // tell "unset" apart from "explicitly off" and let the explicit value win
   // over a legacy field that would otherwise re-enable it.
-  const explicit = (key) => {
+  const explicit = (key: BuiltInSurface): boolean | undefined => {
     if (allDisabled) return false;
     return ui?.[key] === undefined ? undefined : resolveSurface(ui, key);
   };
-  const options = (key) => (allDisabled ? {} : resolveOptions(ui, key));
+  const options = <K extends BuiltInSurface>(key: K): SurfaceOptions<K> => (allDisabled ? {} : resolveOptions(ui, key));
 
   const rulerSuppressed = allDisabled || explicit('ruler') === false;
   const linkPopoverSuppressed = allDisabled || explicit('linkPopover') === false;
@@ -514,7 +547,7 @@ export function normalizeUiConfig(config = {}) {
   const toolbarOptions = normalizeToolbarOptions(rawToolbarOptions);
   const hasCanonicalToolbarItems = isPlainObject(rawToolbarOptions.items);
   const legacyToolbar = config.modules?.toolbar;
-  const legacyToolbarOptions = isPlainObject(legacyToolbar) ? legacyToolbar : {};
+  const legacyToolbarOptions: LegacyToolbarOptions = isPlainObject(legacyToolbar) ? legacyToolbar : {};
   // `modules.slashMenu` is the older spelling of `modules.contextMenu`; the
   // shell warns about it and prefers the newer one, so the same order applies
   // here. Only object forms carry options — the boolean sentinels are
@@ -549,13 +582,13 @@ export function normalizeUiConfig(config = {}) {
     : legacyToolbarOptions.groups;
   const groupCandidates = [toolbarOptions.groups, legacyToolbarGroups];
   const composedGroups = groupCandidates.find(isPlainObject);
-  const orderedGroups = groupCandidates.find(Array.isArray);
+  const orderedGroups = groupCandidates.find(isUnknownArray);
 
   // Every spelling of the selection, including the top-level alias.
   const selectedGroups = hasCanonicalToolbarItems
     ? Object.keys(toolbarOptions.groups ?? {})
     : firstDefined(orderedGroups, legacyToolbarOptions.toolbarGroups, config.toolbarGroups);
-  const selection = Array.isArray(selectedGroups) ? selectedGroups : null;
+  const selection = isUnknownArray(selectedGroups) ? selectedGroups.map(String) : null;
 
   // `BuiltInToolbar.#initToolbarGroups()` rebuilds the group list from
   // `Object.keys(groups)` whenever a composition map is present, which would
@@ -575,7 +608,8 @@ export function normalizeUiConfig(config = {}) {
   // crash the toolbar when it treats that value as a list of item names.
   // Matches the `Object.hasOwn` avoidance elsewhere in this directory, which
   // is ES2022 and outside what this package targets.
-  const ownGroup = (map, group) => Object.prototype.hasOwnProperty.call(map, group);
+  const ownGroup = (map: Record<string, unknown>, group: string): boolean =>
+    Object.prototype.hasOwnProperty.call(map, group);
   const projectedGroups =
     composedGroups && selection
       ? Object.fromEntries(
@@ -601,7 +635,9 @@ export function normalizeUiConfig(config = {}) {
       // live container for a surface that cannot render invites acting on it.
       container: allDisabled
         ? null
-        : (firstDefined(toolbarOptions.container, legacyToolbarOptions.selector, config.toolbar) ?? null),
+        : ([rawToolbarOptions.container, legacyToolbarOptions.selector, config.toolbar].find(
+            (container) => container !== undefined,
+          ) ?? null),
       // `mergeDefined` rather than spread throughout: a config assembled from
       // optional properties carries `undefined` values that a spread would
       // treat as deliberate overrides, erasing the legacy setting underneath.
@@ -632,7 +668,7 @@ export function normalizeUiConfig(config = {}) {
       //
       // Validate this block with the same rules used for `modules.comments` so
       // invalid canonical values cannot reach the layout code.
-      options: allDisabled ? {} : normalizeCommentsUiConfig(withoutCommentPolicy(options('comments'))),
+      options: allDisabled ? {} : normalizeCommentsUiConfig(withoutCommentPolicy(options('comments'))) || {},
     },
 
     contextMenu: {

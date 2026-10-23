@@ -5,6 +5,7 @@
     "checkJs": false,
     "declaration": true,
     "emitDeclarationOnly": true,
+    "allowImportingTsExtensions": true,
     "outDir": "dist",
     "declarationMap": false,
     "sourceMap": false,
