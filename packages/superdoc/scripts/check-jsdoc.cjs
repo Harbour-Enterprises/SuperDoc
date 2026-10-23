@@ -63,7 +63,6 @@
 const fs = require('fs');
 const path = require('path');
 const ts = require('typescript');
-const { formatTypeScriptLaunchError, runTypeScript } = require('./typescript-runner.cjs');
 
 const packageDir = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(packageDir, '..', '..');
@@ -256,6 +255,35 @@ function writeDebtSnapshot(knownUngated) {
   fs.writeFileSync(DEBT_SNAPSHOT_PATH, JSON.stringify(payload, null, 2) + '\n');
 }
 
+function typeCheckGatedFiles(gatedFiles) {
+  const configErrors = [];
+  const config = ts.getParsedCommandLineOfConfigFile(tsconfigPath, {}, {
+    ...ts.sys,
+    onUnRecoverableConfigFileDiagnostic: (diagnostic) => configErrors.push(diagnostic),
+  });
+  const ambientDeclarations = config ? config.fileNames.filter((file) => file.endsWith('.d.ts')) : [];
+  const program = config
+    ? ts.createProgram({ rootNames: [...gatedFiles, ...ambientDeclarations], options: config.options })
+    : null;
+  const diagnostics = program
+    ? [
+        ...config.errors,
+        ...program.getOptionsDiagnostics(),
+        ...gatedFiles.flatMap((file) => {
+          const sourceFile = program.getSourceFile(file);
+          return [...program.getSyntacticDiagnostics(sourceFile), ...program.getSemanticDiagnostics(sourceFile)];
+        }),
+      ]
+    : configErrors;
+  return diagnostics.map((diagnostic) =>
+    ts.formatDiagnostic(diagnostic, {
+      getCanonicalFileName: (file) => file,
+      getCurrentDirectory: () => repoRoot,
+      getNewLine: () => '',
+    }),
+  );
+}
+
 // ─── Main ────────────────────────────────────────────────────────────
 
 const publicSurface = collectPublicExportSurface();
@@ -400,39 +428,8 @@ if (preflightFailures.length > 0 || allowlistFailures.length > 0 || ratchetFailu
 
 // ─── Drift check on CHECKED_FILES (the original gate) ────────────────
 
-const result = runTypeScript(['--noEmit', '-p', tsconfigPath], {
-  encoding: 'utf8',
-  cwd: repoRoot,
-});
-
-const launchError = formatTypeScriptLaunchError(result, 'JSDoc contract check');
-if (launchError) {
-  console.error(`[check-jsdoc] ${launchError}`);
-  process.exit(1);
-}
-if (result.signal !== null) {
-  console.error(`[check-jsdoc] tsc was killed by signal: ${result.signal}`);
-  process.exit(1);
-}
-
-const output = `${result.stdout || ''}${result.stderr || ''}`;
-const allErrors = output.split('\n').filter((line) => /\.[jt]sx?\(\d+,\d+\):\s+error\s+TS\d+:/.test(line));
-
-if (result.status !== 0 && allErrors.length === 0) {
-  console.error('[check-jsdoc] tsc exited with a non-zero status but produced no parseable diagnostics.');
-  console.error(`Status: ${result.status}`);
-  console.error(`Output:\n${output || '(empty)'}`);
-  process.exit(1);
-}
-
 const checkedAbsolute = CHECKED_FILES.map((rel) => path.join(repoRoot, rel));
-const isCheckedError = (line) => {
-  const match = line.match(/^([^(]+)\(\d+,\d+\):/);
-  if (!match) return false;
-  const filePath = path.resolve(repoRoot, match[1]);
-  return checkedAbsolute.includes(filePath);
-};
-const checkedErrors = allErrors.filter(isCheckedError);
+const checkedErrors = typeCheckGatedFiles(checkedAbsolute);
 
 console.log('[check-jsdoc] SuperDoc JSDoc ratchet');
 console.log(HR);
@@ -446,9 +443,6 @@ console.log();
 
 if (checkedErrors.length === 0) {
   console.log(`OK    ${CHECKED_FILES.length} CHECKED_FILES clean; ratchet snapshot in sync.`);
-  console.log(
-    `      (${allErrors.length} non-gated error(s) in the wider tsc run, ignored — tracked by the debt snapshot or outside the public surface.)`,
-  );
   process.exit(0);
 }
 
