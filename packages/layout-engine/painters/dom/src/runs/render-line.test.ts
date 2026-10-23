@@ -3,6 +3,169 @@ import type { Line, ParagraphAttrs, ParagraphBlock, Run, TextRun } from '@superd
 import { resolvePhysicalFamily } from '@superdoc/font-system';
 import { renderLine } from './render-line.js';
 import type { RunRenderContext } from './types.js';
+import { applyTrackedChangeDecorations, syncTrackedDeletionBand } from './tracked-changes.js';
+
+describe('mixed-font tracked deletion bands', () => {
+  const text = (value: string, overrides: Partial<TextRun> = {}): TextRun => ({
+    kind: 'text',
+    text: value,
+    fontFamily: 'Cambria',
+    fontSize: 14.6667,
+    trackedChange: { id: 'deletion-1', kind: 'delete', color: '#123456' },
+    pmStart: 1,
+    pmEnd: value.length + 1,
+    ...overrides,
+  });
+  const paint = (runs: TextRun[], lineOverrides: Partial<Line> = {}) =>
+    renderLine({
+      block: { kind: 'paragraph', id: 'mixed-deletion', runs },
+      line: {
+        fromRun: 0,
+        fromChar: 0,
+        toRun: runs.length - 1,
+        toChar: runs.at(-1)!.text.length,
+        width: 120,
+        ascent: 14,
+        descent: 4,
+        lineHeight: 18,
+        ...lineOverrides,
+      },
+      context: { pageNumber: 1, totalPages: 1, section: 'body' },
+      runContext: makeRunContext({
+        resolveTrackedChangesConfig: () => ({ enabled: true, mode: 'review' }),
+        applyTrackedChangeDecorations,
+      }),
+    });
+
+  it('shares the paint box while preserving leaf typography and revision targets', () => {
+    const line = paint([
+      text('Run '),
+      text('code', { fontFamily: 'Courier New', pmStart: 5, pmEnd: 9 }),
+      text(' after'),
+    ]);
+    const band = line.querySelector<HTMLElement>('.superdoc-tracked-change-band')!;
+    expect(band.textContent).toBe('Run code after');
+    expect(band.style.fontSize).toBe('14.6667px');
+    expect(band.style.getPropertyValue('--sd-tracked-changes-delete-border')).toBe('#123456');
+    expect(band.style.getPropertyValue('--sd-tracked-changes-delete-background-focused')).toBe('#12345644');
+    expect(band.hasAttribute('data-track-change-id')).toBe(false);
+    expect(band.hasAttribute('data-pm-start')).toBe(false);
+    const leaves = Array.from(band.querySelectorAll<HTMLElement>('.superdoc-text-run'));
+    expect(leaves.map((leaf) => leaf.style.fontFamily)).toEqual(['Cambria', '"Courier New"', 'Cambria']);
+    expect(leaves.every((leaf) => leaf.style.fontSize === '14.6667px')).toBe(true);
+    expect(leaves.every((leaf) => leaf.dataset.trackChangeId === 'deletion-1')).toBe(true);
+    expect(leaves[1]!.dataset.pmStart).toBe('5');
+    expect(leaves[1]!.dataset.pmEnd).toBe('9');
+  });
+
+  it.each([
+    { fontSize: 20 },
+    { baselineShift: 3 },
+    { vertAlign: 'superscript' as const },
+    { vertAlign: 'subscript' as const },
+    { trackedChange: { id: 'other', kind: 'delete' as const } },
+    { trackedChange: { id: 'deletion-1', kind: 'delete' as const, semanticColorKey: 'move-from' as const } },
+    { trackedChange: { id: 'deletion-1', kind: 'insert' as const } },
+  ])('preserves distinct formatting or revision boundaries: %j', (overrides) => {
+    const line = paint([text('Run '), text('code', { fontFamily: 'Courier New', ...overrides }), text(' after')]);
+    expect(line.querySelector('.superdoc-tracked-change-band')).toBeNull();
+    expect(line.textContent).toBe('Run code after');
+  });
+
+  it('keeps the uniform-font control on its original inline path', () => {
+    const line = paint([text('Run '), text('after')]);
+    expect(line.querySelector('.superdoc-tracked-change-band')).toBeNull();
+    expect(line.querySelectorAll('.track-delete-dec')).toHaveLength(2);
+  });
+
+  it('keeps leading bold and italic formatting out of regular following leaves', () => {
+    const line = paint([text('Bold ', { bold: true, italic: true }), text('regular', { fontFamily: 'Courier New' })]);
+    const band = line.querySelector<HTMLElement>('.superdoc-tracked-change-band')!;
+    expect(band.style.fontWeight).toBe('');
+    expect(band.style.fontStyle).toBe('');
+    const leaves = Array.from(band.querySelectorAll<HTMLElement>('.superdoc-text-run'));
+    expect(leaves[0]!.style.fontWeight).toBe('bold');
+    expect(leaves[0]!.style.fontStyle).toBe('italic');
+    expect(leaves[1]!.style.fontWeight).toBe('');
+    expect(leaves[1]!.style.fontStyle).toBe('');
+  });
+
+  it('preserves linked leaves inside one mixed-font deletion band', () => {
+    const line = paint([
+      text('Run '),
+      text('code', {
+        fontFamily: 'Courier New',
+        link: { version: 2, href: '#target', rId: 'rId7' },
+        pmStart: 5,
+        pmEnd: 9,
+      }),
+      text(' after'),
+    ]);
+    const band = line.querySelector<HTMLElement>('.superdoc-tracked-change-band');
+    expect(band?.textContent).toBe('Run code after');
+    const link = band?.querySelector<HTMLAnchorElement>('a.superdoc-link');
+    expect(link?.getAttribute('href')).toBe('#target');
+    expect(link?.dataset.linkRid).toBe('rId7');
+    expect(link?.dataset.pmStart).toBe('5');
+    expect(link?.dataset.pmEnd).toBe('9');
+    expect(link?.dataset.trackChangeId).toBe('deletion-1');
+  });
+
+  it('retains hyperlink descriptions through deletion-band review synchronization', () => {
+    const line = paint([
+      text('Run '),
+      text('code', {
+        fontFamily: 'Courier New',
+        link: { version: 2, href: '#target', tooltip: 'Destination tooltip' },
+      }),
+      text(' after'),
+    ]);
+    const band = line.querySelector<HTMLElement>('.superdoc-tracked-change-band')!;
+    const link = band.querySelector<HTMLAnchorElement>('a.superdoc-link')!;
+    const description = line.querySelector<HTMLElement>('.superdoc-sr-only')!;
+    expect(link.getAttribute('aria-describedby')).toBe(description.id);
+    expect(link.title).toBe('Destination tooltip');
+    expect(description.textContent).toBe('Destination tooltip');
+    syncTrackedDeletionBand(band, { mode: 'review' });
+    expect(band.classList.contains('superdoc-tracked-change-band-highlighted')).toBe(true);
+    expect(band.textContent).toBe('Run code after');
+    expect(description.textContent).toBe('Destination tooltip');
+  });
+
+  it('preserves zero-width bookmark identity and coordinates inside the band', () => {
+    const line = paint([
+      text('Run '),
+      text('\u200B', {
+        trackedChange: undefined,
+        pmStart: 5,
+        pmEnd: 5,
+        dataAttrs: { 'data-bookmark-marker': 'start', 'data-bookmark-name': '_GoBack' },
+      }),
+      text('code', { fontFamily: 'Courier New', pmStart: 5, pmEnd: 9 }),
+    ]);
+    const band = line.querySelector<HTMLElement>('.superdoc-tracked-change-band');
+    expect(band?.textContent).toBe('Run \u200Bcode');
+    const marker = band?.querySelector<HTMLElement>('[data-bookmark-marker]');
+    expect(marker?.dataset.bookmarkName).toBe('_GoBack');
+    expect(marker?.dataset.pmStart).toBe('5');
+    expect(marker?.dataset.pmEnd).toBe('5');
+    expect(band?.classList.contains('superdoc-tracked-change-band-highlighted')).toBe(true);
+  });
+
+  it('keeps visible bookmark markers outside shared deletion paint', () => {
+    const line = paint([
+      text('Run '),
+      text('[', {
+        trackedChange: undefined,
+        pmStart: 5,
+        pmEnd: 5,
+        dataAttrs: { 'data-bookmark-marker': 'start' },
+      }),
+      text('code', { fontFamily: 'Courier New' }),
+    ]);
+    expect(line.querySelector('.superdoc-tracked-change-band')).toBeNull();
+  });
+});
 
 const makeRunContext = (overrides: Partial<RunRenderContext> = {}): RunRenderContext => ({
   doc: document,

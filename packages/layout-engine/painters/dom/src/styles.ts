@@ -170,6 +170,7 @@ const DOCUMENT_SURFACE_STYLES = `
 .${CLASS_NAMES.container} .${CLASS_NAMES.line},
 .${CLASS_NAMES.container} .superdoc-inline-text-group,
 .${CLASS_NAMES.container} .superdoc-inline-script-baseline,
+.${CLASS_NAMES.container} .superdoc-tracked-change-band,
 .${CLASS_NAMES.container} .superdoc-scaled-inline-advance,
 .${CLASS_NAMES.container} .superdoc-list-content,
 .${CLASS_NAMES.container} .${DOM_CLASS_NAMES.LIST_MARKER} {
@@ -418,6 +419,24 @@ const TRACK_CHANGE_STYLES = `
     solid
     var(--sd-tracked-changes-delete-text, currentColor)
     var(--sd-tracked-changes-delete-decoration-thickness, 2px) !important;
+}
+
+.superdoc-layout .superdoc-tracked-change-band-highlighted {
+  border-top: var(--sd-tracked-changes-delete-border-width, 1px) dashed var(--sd-tracked-changes-delete-border, ${INLINE_TRACKED_CHANGE_DEFAULTS.delete.border});
+  border-bottom: var(--sd-tracked-changes-delete-border-width, 1px) dashed var(--sd-tracked-changes-delete-border, ${INLINE_TRACKED_CHANGE_DEFAULTS.delete.border});
+  background-color: var(--sd-tracked-changes-delete-background, ${INLINE_TRACKED_CHANGE_DEFAULTS.delete.background});
+}
+
+.superdoc-layout .superdoc-tracked-change-band-highlighted:has(> .track-change-focused) {
+  border-top-style: solid;
+  border-bottom-style: solid;
+  background-color: var(--sd-tracked-changes-delete-background-focused, #cb0e4744);
+}
+
+.superdoc-layout .superdoc-tracked-change-band-highlighted > .track-delete-dec.highlighted,
+.superdoc-layout .superdoc-tracked-change-band-highlighted > .track-delete-dec.highlighted.track-change-focused {
+  border-color: transparent;
+  background-color: transparent;
 }
 
 .superdoc-layout .track-format-dec.highlighted {

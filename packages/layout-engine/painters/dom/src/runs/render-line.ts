@@ -40,6 +40,7 @@ import {
   underlineOffsetFromLineTop,
 } from './tab-run.js';
 import type { RenderLineParams } from './types.js';
+import { groupTrackedDeletionBands } from './tracked-changes.js';
 
 /**
  * Type guard narrowing to the shared word layout contract type.
@@ -933,6 +934,10 @@ export function* renderLineWork({
       runContext.pendingTooltips.delete(anchor as HTMLElement); // Clean up memory
     }
   });
+
+  if (!useSegmentPositioning && !line.inlineBoxes?.length && !lineContainsLineExpandingImage) {
+    groupTrackedDeletionBands(el);
+  }
 
   return el;
 }

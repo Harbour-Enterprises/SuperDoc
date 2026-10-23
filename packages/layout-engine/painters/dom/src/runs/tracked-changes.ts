@@ -523,3 +523,92 @@ export const applyTrackedChangeDecorations = (
   for (const [name, value] of Object.entries(facts.style)) elem.style.setProperty(name, value);
   for (const [name, value] of Object.entries(facts.attributes)) elem.setAttribute(name, value);
 };
+
+const bandClass = 'superdoc-tracked-change-band';
+const styleNames = (style: CSSStyleDeclaration): string[] =>
+  Array.from({ length: style.length }, (_, index) => style.item(index));
+const deletionColorNames = (style: CSSStyleDeclaration): string[] =>
+  styleNames(style).filter((name) => name.startsWith('--sd-tracked-changes-delete-'));
+
+const isNeutralBookmarkMarker = (element: HTMLElement): boolean =>
+  element.tagName === 'SPAN' &&
+  element.classList.contains('superdoc-text-run') &&
+  element.hasAttribute('data-bookmark-marker') &&
+  element.textContent === '\u200B' &&
+  element.dataset.pmStart !== undefined &&
+  element.dataset.pmStart === element.dataset.pmEnd &&
+  (!element.style.position || element.style.position === 'static') &&
+  !element.style.transform;
+
+const deletionBandKey = (element: HTMLElement): string | undefined => {
+  if (
+    (element.tagName !== 'SPAN' && !(element.tagName === 'A' && element.classList.contains('superdoc-link'))) ||
+    !element.classList.contains('superdoc-text-run') ||
+    !element.classList.contains('track-delete-dec') ||
+    !element.classList.contains('highlighted') ||
+    element.dataset.trackChangeKind !== 'delete' ||
+    !element.dataset.trackChangeId ||
+    element.dataset.trackChangeKinds !== 'delete' ||
+    (element.dataset.trackChangeSemanticColorKey && element.dataset.trackChangeSemanticColorKey !== 'deletion') ||
+    (element.style.position && element.style.position !== 'static') ||
+    (element.style.verticalAlign && element.style.verticalAlign !== 'baseline') ||
+    element.style.transform ||
+    !element.style.fontSize
+  ) {
+    return undefined;
+  }
+  const colors = deletionColorNames(element.style)
+    .sort()
+    .map((name) => [name, element.style.getPropertyValue(name)]);
+  return JSON.stringify([element.dataset.trackChangeId, element.style.fontSize, colors]);
+};
+
+export const syncTrackedDeletionBand = (band: HTMLElement, config: Partial<TrackedChangesRenderConfig> = {}): void => {
+  const leaves = (Array.from(band.children) as HTMLElement[]).filter((element) => !isNeutralBookmarkMarker(element));
+  const first = leaves[0];
+  const key = first && deletionBandKey(first);
+  const highlighted = Boolean(
+    config.enabled !== false &&
+    (config.mode === undefined || config.mode === 'review') &&
+    key &&
+    leaves.every((leaf) => deletionBandKey(leaf) === key),
+  );
+  band.classList.toggle('superdoc-tracked-change-band-highlighted', highlighted);
+  for (const name of deletionColorNames(band.style)) band.style.removeProperty(name);
+  if (highlighted && first) {
+    for (const name of deletionColorNames(first.style)) {
+      band.style.setProperty(name, first.style.getPropertyValue(name));
+    }
+  }
+};
+
+export const groupTrackedDeletionBands = (line: HTMLElement): void => {
+  let group: HTMLElement[] = [];
+  let key: string | undefined;
+  const flush = () => {
+    const leaves = group.filter((element) => !isNeutralBookmarkMarker(element));
+    if (leaves.length > 1 && new Set(leaves.map((element) => element.style.fontFamily)).size > 1) {
+      const first = leaves[0]!;
+      const band = line.ownerDocument.createElement('span');
+      band.className = bandClass;
+      band.style.fontFamily = first.style.fontFamily;
+      band.style.fontSize = first.style.fontSize;
+      line.insertBefore(band, first);
+      band.append(...group);
+      syncTrackedDeletionBand(band);
+    }
+    group = [];
+  };
+  for (const node of Array.from(line.childNodes)) {
+    const element = node.nodeType === 1 ? (node as HTMLElement) : undefined;
+    if (element && isNeutralBookmarkMarker(element)) {
+      if (group.length) group.push(element);
+      continue;
+    }
+    const nextKey = element ? deletionBandKey(element) : undefined;
+    if (!nextKey || nextKey !== key) flush();
+    key = nextKey;
+    if (nextKey && element) group.push(element);
+  }
+  flush();
+};

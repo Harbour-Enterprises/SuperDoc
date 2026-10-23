@@ -299,6 +299,7 @@ function buildDomPainterHandle(painter: DomPainter): DomPainterHandle {
 export { resolveRunTypographyStyles, resolveRunDecorationStyles } from './runs/text-style-facts.js';
 export {
   resolveTrackedChangeDecorationFacts,
+  syncTrackedDeletionBand,
   getTrackedChangeLayers,
   resolveTrackedChangesConfig,
 } from './runs/tracked-changes.js';
