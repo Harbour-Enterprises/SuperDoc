@@ -3709,6 +3709,9 @@ describe('public ui — command reason taxonomy', () => {
       targetRuns?: Array<{ text: string; props?: Record<string, unknown> }>;
       sourceParagraphProps?: Record<string, unknown>;
       targetParagraphProps?: Record<string, unknown>;
+      sourceStyleRef?: string | null;
+      targetStyleRef?: string | null;
+      paragraphOps?: Record<string, unknown>;
       queryMatch?: () => unknown;
       readEffectiveInlineUniformity?: () => unknown;
       bold?: () => unknown;
@@ -3790,12 +3793,20 @@ describe('public ui — command reason taxonomy', () => {
     const apply = vi.fn(opts.applyResult ?? (() => ({ success: true })));
     const setAlignment = vi.fn(() => ({ success: true }));
     const setIndentation = vi.fn(() => ({ success: true }));
+    const setSpacing = vi.fn(() => ({ success: true }));
+    const clearSpacing = vi.fn(() => ({ success: true }));
+    const clearAlignment = vi.fn(() => ({ success: true }));
+    const clearIndentation = vi.fn(() => ({ success: true }));
+    const setMarkRunProps = vi.fn(() => ({ success: true }));
+    const setNumbering = vi.fn(() => ({ success: true }));
+    const setStyle = vi.fn(() => ({ success: true }));
+    const clearStyle = vi.fn(() => ({ success: true }));
     const applyListStyle = vi.fn(() => ({ success: true }));
     const getNodeForInput = (input: { nodeId: string; story?: unknown }) => ({
       node: {
         kind: 'paragraph',
         paragraph: {
-          styleRef: null,
+          styleRef: (input.nodeId === 'P1' ? opts.sourceStyleRef : opts.targetStyleRef) ?? null,
           props: input.nodeId === 'P1' ? sourceParagraphProps : targetParagraphProps,
           inlines: (input.nodeId === 'P1' ? sourceRuns : targetRuns).map((run) => ({
             run: {
@@ -3832,11 +3843,22 @@ describe('public ui — command reason taxonomy', () => {
         format: {
           apply,
           ...(opts.bold ? { bold: opts.bold } : {}),
-          paragraph: { setAlignment, setIndentation },
+          paragraph: {
+            setAlignment,
+            setIndentation,
+            setSpacing,
+            clearSpacing,
+            clearAlignment,
+            clearIndentation,
+            setMarkRunProps,
+            setNumbering,
+            ...(opts.paragraphOps ?? {}),
+          },
           ...(opts.readEffectiveInlineUniformity
             ? { readEffectiveInlineUniformity: opts.readEffectiveInlineUniformity }
             : {}),
         },
+        styles: { paragraph: { setStyle, clearStyle } },
         ...(opts.listStyle
           ? {
               lists: {
@@ -3855,6 +3877,14 @@ describe('public ui — command reason taxonomy', () => {
       apply,
       setAlignment,
       setIndentation,
+      setSpacing,
+      clearSpacing,
+      clearAlignment,
+      clearIndentation,
+      setMarkRunProps,
+      setNumbering,
+      setStyle,
+      clearStyle,
       applyListStyle,
       setSelection(selection: Record<string, unknown>) {
         currentSelection = selection;
@@ -4967,6 +4997,125 @@ describe('public ui — command reason taxonomy', () => {
         alignment: 'center',
       });
     });
+  });
+
+  it('copy-format replaces target paragraph spacing with the source spacing in twips', async () => {
+    const { superdoc, setSpacing, clearSpacing, setSelection, targetSelection } = makeFormatPainterSuperdoc({
+      sourceParagraphProps: { spacing: { before: 6, after: 12, line: 1.5, lineRule: 'auto' } },
+      targetParagraphProps: { spacing: { before: 24 } },
+    });
+    const ui = createSuperDocUI({ superdoc });
+
+    expect(await ui.commands.executeAsync('copy-format')).toBe(true);
+    setSelection(targetSelection);
+    ui.formatPainter.notifyPointerUp();
+
+    const target = { kind: 'block', nodeType: 'paragraph', nodeId: 'P2' };
+    await vi.waitFor(() => {
+      expect(setSpacing).toHaveBeenCalledWith({ target, before: 120, after: 240, line: 360, lineRule: 'auto' });
+    });
+    expect(clearSpacing).toHaveBeenCalledWith({ target });
+    expect(clearSpacing.mock.invocationCallOrder[0]).toBeLessThan(setSpacing.mock.invocationCallOrder[0]);
+  });
+
+  it('copy-format calls a custom paragraph adapter method with its owning object as receiver', async () => {
+    const receivers: Array<string | undefined> = [];
+    const paragraphOps = {
+      adapterName: 'custom-paragraph-adapter',
+      setAlignment(this: { adapterName?: string } | undefined) {
+        receivers.push(this?.adapterName);
+        return { success: true };
+      },
+    };
+    const { superdoc, setSelection, targetSelection } = makeFormatPainterSuperdoc({
+      sourceParagraphProps: { alignment: 'center' },
+      paragraphOps,
+    });
+    const ui = createSuperDocUI({ superdoc });
+
+    expect(await ui.commands.executeAsync('copy-format')).toBe(true);
+    setSelection(targetSelection);
+    ui.formatPainter.notifyPointerUp();
+
+    await vi.waitFor(() => {
+      expect(receivers).toEqual(['custom-paragraph-adapter']);
+    });
+  });
+
+  it('copy-format applies the source paragraph style to the target', async () => {
+    const { superdoc, setStyle, clearStyle, setSelection, targetSelection } = makeFormatPainterSuperdoc({
+      sourceParagraphProps: {},
+      sourceStyleRef: 'Heading1',
+      targetStyleRef: 'Quote',
+    });
+    const ui = createSuperDocUI({ superdoc });
+
+    expect(await ui.commands.executeAsync('copy-format')).toBe(true);
+    setSelection(targetSelection);
+    ui.formatPainter.notifyPointerUp();
+
+    const target = { kind: 'block', nodeType: 'paragraph', nodeId: 'P2' };
+    await vi.waitFor(() => {
+      expect(setStyle).toHaveBeenCalledWith({ target, styleId: 'Heading1' });
+    });
+    expect(clearStyle).not.toHaveBeenCalled();
+  });
+
+  it('copy-format clears the target paragraph style when the source carries none', async () => {
+    const { superdoc, setStyle, clearStyle, setSelection, targetSelection } = makeFormatPainterSuperdoc({
+      sourceParagraphProps: {},
+      targetStyleRef: 'Quote',
+    });
+    const ui = createSuperDocUI({ superdoc });
+
+    expect(await ui.commands.executeAsync('copy-format')).toBe(true);
+    setSelection(targetSelection);
+    ui.formatPainter.notifyPointerUp();
+
+    const target = { kind: 'block', nodeType: 'paragraph', nodeId: 'P2' };
+    await vi.waitFor(() => {
+      expect(clearStyle).toHaveBeenCalledWith({ target });
+    });
+    expect(setStyle).not.toHaveBeenCalled();
+  });
+
+  it('copy-format clears target alignment and indentation the source does not carry', async () => {
+    const { superdoc, clearAlignment, clearIndentation, setAlignment, setIndentation, setSelection, targetSelection } =
+      makeFormatPainterSuperdoc({
+        sourceParagraphProps: {},
+        targetParagraphProps: { alignment: 'center', indent: { left: 36 } },
+      });
+    const ui = createSuperDocUI({ superdoc });
+
+    expect(await ui.commands.executeAsync('copy-format')).toBe(true);
+    setSelection(targetSelection);
+    ui.formatPainter.notifyPointerUp();
+
+    const target = { kind: 'block', nodeType: 'paragraph', nodeId: 'P2' };
+    await vi.waitFor(() => {
+      expect(clearAlignment).toHaveBeenCalledWith({ target });
+    });
+    expect(clearIndentation).toHaveBeenCalledWith({ target });
+    expect(setAlignment).not.toHaveBeenCalled();
+    expect(setIndentation).not.toHaveBeenCalled();
+  });
+
+  it('copy-format applies source paragraph mark run props and numbering to a plain target', async () => {
+    const { superdoc, setMarkRunProps, setNumbering, setSelection, targetSelection } = makeFormatPainterSuperdoc({
+      sourceParagraphProps: { markRunProps: { bold: true }, numbering: { numId: 3, level: 1 } },
+    });
+    const ui = createSuperDocUI({ superdoc });
+
+    expect(await ui.commands.executeAsync('copy-format')).toBe(true);
+    setSelection(targetSelection);
+    ui.formatPainter.notifyPointerUp();
+
+    const target = { kind: 'block', nodeType: 'paragraph', nodeId: 'P2' };
+    await vi.waitFor(() => {
+      expect(setMarkRunProps).toHaveBeenCalledWith({ target, markRunProps: { bold: true } });
+    });
+    expect(setNumbering).toHaveBeenCalledWith({ target, numId: 3, level: 1 });
+    expect(setNumbering).toHaveBeenCalledTimes(1);
   });
 
   it('copy-format converts paragraph indentation points to twips before apply', async () => {

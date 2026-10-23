@@ -117,7 +117,12 @@ import { collectEntityHitsFromChain } from './entity-at.js';
 import { decodeLayoutStoryDataset } from '@superdoc/dom-contract';
 import { getParagraphInlineDirection } from '@superdoc/contracts';
 import { isPlainObject } from '../../helpers/object-guards.js';
-import { INLINE_PROPERTY_BY_KEY, isStoryLocator, type InlineRunPatchKey } from '@superdoc/document-api';
+import {
+  INLINE_PROPERTY_BY_KEY,
+  isStoryLocator,
+  type InlineRunPatchKey,
+  type TextSegment,
+} from '@superdoc/document-api';
 
 // ---------------------------------------------------------------------------
 // Loose runtime views over the duck-typed host. The public types keep the
@@ -471,16 +476,17 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   );
 }
 
-/** Resolve a dotted path (e.g. `format.bold`) to a callable on the doc facade. */
+/** Resolve a dotted path (e.g. `format.bold`) to a callable on the doc facade, bound to its owning object. */
 function resolveDocOperation(doc: LooseRecord | null, path: string): AnyFn | null {
   if (!doc) return null;
   const parts = path.split('.');
-  let cursor: unknown = doc;
+  const name = parts.pop()!;
+  let owner: unknown = doc;
   for (const part of parts) {
-    if (cursor === null || (typeof cursor !== 'object' && typeof cursor !== 'function')) return null;
-    cursor = Reflect.get(cursor, part);
+    if (owner === null || (typeof owner !== 'object' && typeof owner !== 'function')) return null;
+    owner = Reflect.get(owner, part);
   }
-  return typeof cursor === 'function' ? (cursor as AnyFn) : null;
+  return hostMethod(owner, name);
 }
 
 function failedReceipt(
@@ -9976,15 +9982,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     // Prefer captureSlice.target (frozen at executeCopyFormat call time from
     // state.selection) over the fresh live sel, which may be null or no longer a
     // text selection after the toolbar click shifts focus.
-    const selTarget = ((captureSlice?.target as LooseRecord | null | undefined) ??
-      (selection as LooseRecord | null)?.target) as LooseRecord | undefined;
-    if (!selTarget || selTarget['kind'] !== 'text') return null;
-    const segments = Array.isArray(selTarget['segments']) ? (selTarget['segments'] as LooseRecord[]) : [];
+    const selTarget = captureSlice?.target ?? selection?.target;
+    if (!selTarget || selTarget.kind !== 'text') return null;
+    const segments: readonly TextSegment[] = Array.isArray(selTarget.segments) ? selTarget.segments : [];
     if (segments.length === 0) return null;
 
     const doc = getDoc();
     if (!doc) return null;
-    const sourceStory = selTarget['story'];
+    const sourceStory = selTarget.story;
 
     const sourceSelection = captureSlice ?? selectionSliceFromInfo(selection, 'ready');
     const effectiveInput = effectiveInlineUniformityInput(sourceSelection);
@@ -9993,14 +9998,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     // A terminal zero-width segment locates the selected paragraph mark; its
     // following paragraph contributes neither text nor formatting to the source.
     for (const segment of formatPainterTextSegments(segments)) {
-      const nodeResult = (await readBlockNode(paragraphTarget(segment['blockId'] as string, sourceStory))) as
+      const nodeResult = (await readBlockNode(paragraphTarget(segment.blockId, sourceStory))) as
         | LooseRecord
         | undefined;
       const node = (nodeResult?.['node'] as LooseRecord | undefined) ?? null;
       if (!node) return null;
       const para = getParagraphLikeData(node);
       const runs = (Array.isArray(para?.['inlines']) ? para!['inlines'] : []) as LooseRecord[];
-      coveredRunProps.push(...sliceRunProps(runs, segment['range'] as { start: number; end: number }));
+      coveredRunProps.push(...sliceRunProps(runs, segment.range));
     }
     const mergedRunProps = coveredRunProps.length
       ? intersectRunProps(coveredRunProps[0], ...coveredRunProps.slice(1))
@@ -10021,10 +10026,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     };
     // Prefer captureSlice.activeMarks — same freeze-time snapshot used for target above.
     const activeMarks = new Set([
-      ...(captureSlice?.activeMarks ??
-        (Array.isArray((selection as LooseRecord | null)?.['activeMarks'])
-          ? ((selection as LooseRecord)['activeMarks'] as string[])
-          : [])),
+      ...(captureSlice?.activeMarks ?? (Array.isArray(selection?.activeMarks) ? selection.activeMarks : [])),
       ...visibleActiveMarks,
     ]);
     for (const [markName, patchKey] of Object.entries(MARK_TO_PATCH)) {
@@ -10082,12 +10084,12 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const paragraphSegments = formatPainterParagraphSegments(segments, sourceWholeCells);
     if (paragraphSegments.length === 1) {
       const segment = paragraphSegments[0];
-      const nodeResult = (await readBlockNode(paragraphTarget(segment['blockId'] as string, sourceStory))) as
+      const nodeResult = (await readBlockNode(paragraphTarget(segment.blockId, sourceStory))) as
         | LooseRecord
         | undefined;
       const node = (nodeResult?.['node'] as LooseRecord | undefined) ?? null;
       if (node && getParagraphLikeData(node)) {
-        paragraphSnapshot = await extractParagraphSnapshot(node, segment['blockId'] as string, doc, sourceStory);
+        paragraphSnapshot = await extractParagraphSnapshot(node, segment.blockId, doc, sourceStory);
       }
     }
 
@@ -10106,12 +10108,15 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     return null;
   };
 
-  const formatPainterTextSegments = (segments: LooseRecord[]): LooseRecord[] =>
+  const formatPainterTextSegments = (segments: readonly TextSegment[]): readonly TextSegment[] =>
     segments.length > 1 && segments.at(-1)?.range?.start === segments.at(-1)?.range?.end
       ? segments.slice(0, -1)
       : segments;
 
-  const formatPainterParagraphSegments = (segments: LooseRecord[], wholeCells = false): LooseRecord[] => {
+  const formatPainterParagraphSegments = (
+    segments: readonly TextSegment[],
+    wholeCells = false,
+  ): readonly TextSegment[] => {
     if (wholeCells) return formatPainterTextSegments(segments);
     if (segments.length === 1 && segments[0].range?.start === segments[0].range?.end) return segments;
     // Every segment before the endpoint crosses its paragraph mark. The final
@@ -10189,11 +10194,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const numbering = !isNaN(numId) ? { numId, ...(level != null ? { level } : {}) } : null;
 
     let listStyle: unknown = null;
-    if (numbering && typeof doc['lists']?.['getState'] === 'function') {
+    const getListState = resolveDocOperation(doc, 'lists.getState');
+    if (numbering && getListState) {
       try {
-        const listState = await doc['lists']['getState']({ target: paragraphTarget(blockId, story) });
-        if (listState && typeof doc['lists']?.['getStyle'] === 'function') {
-          listStyle = (await doc['lists']['getStyle'](listState)) ?? null;
+        const listState = await getListState({ target: paragraphTarget(blockId, story) });
+        const getListStyle = resolveDocOperation(doc, 'lists.getStyle');
+        if (listState && getListStyle) {
+          listStyle = (await getListStyle(listState)) ?? null;
         }
       } catch {
         /* no list state — skip */
@@ -10233,18 +10240,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         return;
       selectionRead = await readSelection();
       const sel = selectionRead.selection;
-      if (!sel || (sel as LooseRecord)['empty']) continue; // wait for text selection to ripen
+      if (!sel || sel.empty) continue; // wait for text selection to ripen
       key = selectionKey(sel);
       if (key === painter.sourceSelectionKey) continue;
       break;
     }
 
     // Text selection settled: apply inline + paragraph.
-    if (
-      selectionRead?.selection &&
-      !(selectionRead.selection as LooseRecord)['empty'] &&
-      key !== painter.sourceSelectionKey
-    ) {
+    if (selectionRead?.selection && !selectionRead.selection.empty && key !== painter.sourceSelectionKey) {
       await applyFormatPainter(selectionRead.selection, selectionRead.cellTarget, selectionRead.tableCellSelection);
       return;
     }
@@ -10289,21 +10292,21 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     }
 
     // TextTarget (segments/blockIds) for paragraph apply; SelectionTarget for inline apply
-    const selTarget = (selection as LooseRecord)['target'] as LooseRecord | undefined;
+    const selTarget = selection.target;
     const selectionTarget = cellTarget ?? selection.selectionTarget;
 
-    const selectionIsEmpty = (selection as LooseRecord)['empty'] === true;
+    const selectionIsEmpty = selection.empty === true;
 
-    const segments = Array.isArray(selTarget?.['segments']) ? (selTarget!['segments'] as LooseRecord[]) : [];
-    const targetStory = selTarget?.['story'];
+    const segments: readonly TextSegment[] = Array.isArray(selTarget?.segments) ? selTarget.segments : [];
+    const targetStory = selTarget?.story;
     const inline = { ...snap.inline };
     if (!selectionIsEmpty) {
       for (const segment of formatPainterTextSegments(segments)) {
-        const result = await readBlockNode(paragraphTarget(segment['blockId'] as string, targetStory));
+        const result = await readBlockNode(paragraphTarget(segment.blockId, targetStory));
         const node = result?.node as LooseRecord | undefined;
         const para = node ? getParagraphLikeData(node) : null;
         const runs = (Array.isArray(para?.inlines) ? para.inlines : []) as LooseRecord[];
-        for (const props of sliceRunProps(runs, segment.range as { start: number; end: number })) {
+        for (const props of sliceRunProps(runs, segment.range)) {
           for (const key of Object.keys(sdRunPropsToInlineRunPatch(props))) {
             if (!(key in inline) && !snap.mixedInlineKeys.includes(key)) {
               inline[key] = FORMAT_PAINTER_BOOLEAN_KEYS.has(key) ? false : null;
@@ -10349,7 +10352,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
     if (snap.paragraph) {
       for (const segment of formatPainterParagraphSegments(segments, Boolean(tableCellSelection))) {
-        const blockAddress = paragraphTarget(segment['blockId'] as string, targetStory);
+        const blockAddress = paragraphTarget(segment.blockId, targetStory);
         const nodeResult = (await readBlockNode(blockAddress)) as LooseRecord | undefined;
         const node = (nodeResult?.['node'] as LooseRecord | undefined) ?? null;
         const nodeAddress = (nodeResult?.['address'] as LooseRecord | undefined) ?? null;
@@ -10360,22 +10363,23 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         const target = {
           kind: 'block',
           nodeType,
-          nodeId: segment['blockId'],
+          nodeId: segment.blockId,
           ...(targetStory && typeof targetStory === 'object' ? { story: targetStory } : {}),
         };
         const { styleId, alignment, spacing, indentation, markRunProps, numbering, listStyle } = snap.paragraph;
 
         const targetProps = getParagraphLikeData(node)?.props as LooseRecord | undefined;
-        if (styleId) await (doc as LooseRecord).styles?.paragraph?.setStyle?.({ target, styleId });
+        if (styleId) await resolveDocOperation(doc, 'styles.paragraph.setStyle')?.({ target, styleId });
         else if (getParagraphLikeData(node)?.styleRef)
-          await (doc as LooseRecord).styles?.paragraph?.clearStyle?.({ target });
-        if (alignment) await (doc as LooseRecord).format?.paragraph?.setAlignment?.({ target, alignment });
+          await resolveDocOperation(doc, 'styles.paragraph.clearStyle')?.({ target });
+        if (alignment) await resolveDocOperation(doc, 'format.paragraph.setAlignment')?.({ target, alignment });
         else if (targetProps?.alignment != null)
-          await (doc as LooseRecord).format?.paragraph?.clearAlignment?.({ target });
+          await resolveDocOperation(doc, 'format.paragraph.clearAlignment')?.({ target });
         // Replace these groups, including fields absent from a nonempty source
         // group, without resetting unrelated pPr such as borders or section data.
-        if (targetProps?.spacing != null) await (doc as LooseRecord).format?.paragraph?.clearSpacing?.({ target });
-        if (targetProps?.indent != null) await (doc as LooseRecord).format?.paragraph?.clearIndentation?.({ target });
+        if (targetProps?.spacing != null) await resolveDocOperation(doc, 'format.paragraph.clearSpacing')?.({ target });
+        if (targetProps?.indent != null)
+          await resolveDocOperation(doc, 'format.paragraph.clearIndentation')?.({ target });
         if (spacing) {
           const sp = spacing as Record<string, unknown>;
           const rawLr = (sp['lineRule'] as string | undefined) ?? 'auto';
@@ -10392,7 +10396,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
                 }
               : {}),
           };
-          await (doc as LooseRecord).format?.paragraph?.setSpacing?.({ target, ...rawSpacing });
+          await resolveDocOperation(doc, 'format.paragraph.setSpacing')?.({ target, ...rawSpacing });
         }
         if (indentation) {
           const rawIndentation = {
@@ -10401,22 +10405,26 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
             ...(indentation.firstLine != null ? { firstLine: pointsToTwips(indentation.firstLine) } : {}),
             ...(indentation.hanging != null ? { hanging: pointsToTwips(indentation.hanging) } : {}),
           };
-          await (doc as LooseRecord).format?.paragraph?.setIndentation?.({ target, ...rawIndentation });
+          await resolveDocOperation(doc, 'format.paragraph.setIndentation')?.({ target, ...rawIndentation });
         }
-        if (markRunProps) await (doc as LooseRecord).format?.paragraph?.setMarkRunProps?.({ target, markRunProps });
-        if (numbering) await (doc as LooseRecord).format?.paragraph?.setNumbering?.({ target, ...numbering });
+        if (markRunProps)
+          await resolveDocOperation(doc, 'format.paragraph.setMarkRunProps')?.({ target, markRunProps });
+        if (numbering) await resolveDocOperation(doc, 'format.paragraph.setNumbering')?.({ target, ...numbering });
 
         if (listStyle) {
           const targetNodeResult = (await readBlockNode(blockAddress)) as LooseRecord | undefined;
           const blockIsListItem =
             (targetNodeResult?.['address'] as LooseRecord | undefined)?.['nodeType'] === 'listItem';
           if (blockIsListItem) {
-            await (doc as LooseRecord).lists?.applyStyle?.({
-              target: listItemTarget(segment['blockId'] as string, targetStory),
+            await resolveDocOperation(
+              doc,
+              'lists.applyStyle',
+            )?.({
+              target: listItemTarget(segment.blockId, targetStory),
               style: listStyle,
             });
           } else if (numbering) {
-            await (doc as LooseRecord).format?.paragraph?.setNumbering?.({ target, ...numbering });
+            await resolveDocOperation(doc, 'format.paragraph.setNumbering')?.({ target, ...numbering });
           }
         }
       }
