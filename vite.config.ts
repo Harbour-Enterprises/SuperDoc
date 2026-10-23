@@ -79,6 +79,7 @@ export default defineConfig({
       'superdoc/no-local-object-guard': 'error',
       'typescript/ban-ts-comment': ['error', { 'ts-expect-error': true, 'ts-ignore': true, 'ts-nocheck': true }],
       'superdoc/no-ts-comment-in-js': 'error',
+      'typescript/no-explicit-any': 'error',
       // Every hit was intentional: preallocated arrays in layout hot paths,
       // sanitizers that match control characters, and `[...listeners]`
       // snapshots that keep listeners added mid-notify from running.
@@ -91,6 +92,10 @@ export default defineConfig({
         // JSON Schema `if`/`then` keywords, not promise-like objects.
         files: ['packages/document-api/src/contract/schemas.ts'],
         rules: { 'unicorn/no-thenable': 'off' },
+      },
+      {
+        files: ['packages/superdoc/src/core/SuperDoc.ts', 'packages/superdoc/src/public/ui/create-super-doc-ui.ts'],
+        rules: { 'typescript/no-explicit-any': 'off' },
       },
     ],
     ignorePatterns: [
