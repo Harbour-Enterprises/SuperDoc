@@ -394,7 +394,6 @@ export interface ClipboardInsertInput {
   plan?: ClipboardInsertPlan;
   fragment?: SDPasteFragment;
   target?: ClipboardTarget;
-  /** Controls target resolution and execution. Takes precedence over options.changeMode; defaults to direct. */
   changeMode?: 'direct' | 'tracked';
   /** Preserve source formatting by default; match-destination is used by paste-and-match-style gestures. */
   formattingMode?: 'preserve-source' | 'match-destination';
