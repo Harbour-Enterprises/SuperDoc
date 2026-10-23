@@ -7,7 +7,7 @@ import {
   type CSSProperties,
   type ForwardedRef,
 } from 'react';
-import { useStableId, useMemoByValue } from './utils';
+import { useStableId, useMemoByContent, useMemoByValue } from './utils';
 import type {
   CallbackProps,
   DocumentMode,
@@ -62,10 +62,12 @@ function SuperDocEditorInner(props: SuperDocEditorProps, ref: ForwardedRef<Super
     user: userProp,
     users: usersProp,
     modules,
-    ui,
+    ui: uiProp,
     // All other props passed through
     ...restProps
   } = props;
+
+  const ui = useMemoByContent(uiProp);
 
   // Apply defaults
   const documentMode = props.documentMode ?? 'editing';

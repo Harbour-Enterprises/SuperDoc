@@ -59,6 +59,31 @@ export function useMemoByValue<T>(value: T): T {
   return stableRef.current;
 }
 
+export function useMemoByContent<T>(value: T): T {
+  const [stable, setStable] = React.useState(value);
+  const next = stable === value || contentEqual(stable, value) ? stable : value;
+  if (next !== stable) setStable(next);
+  return next;
+}
+
+function contentEqual(a: unknown, b: unknown, ancestors: readonly unknown[] = []): boolean {
+  if (a === b) return true;
+  if (!isPlainData(a) || !isPlainData(b)) return false;
+  const isCycle = ancestors.includes(a) || ancestors.includes(b);
+  if (isCycle) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  const path = [...ancestors, a, b];
+  return keys.every((key) => Object.prototype.hasOwnProperty.call(b, key) && contentEqual(a[key], b[key], path));
+}
+
+function isPlainData(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object') return false;
+  const prototype = Object.getPrototypeOf(value);
+  return Array.isArray(value) || prototype === Object.prototype || prototype === null;
+}
+
 function shallowJsonEqual<T>(a: T, b: T): boolean {
   if (a === b) return true;
   if (a == null || b == null) return a === b;

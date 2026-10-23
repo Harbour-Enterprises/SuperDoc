@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vite-plus/test'
 import { render, cleanup, waitFor } from '@testing-library/react';
 import { createRef, StrictMode } from 'react';
 import { SuperDocEditor } from './SuperDocEditor';
-import type { SuperDocRef } from './types';
+import type { SuperDocEditorProps, SuperDocRef } from './types';
 
 const SUPERDOC_READY_WAIT_TIMEOUT = 10000;
 const SUPERDOC_READY_TEST_TIMEOUT = 15000;
@@ -415,6 +415,60 @@ describe('SuperDocEditor', () => {
   });
 
   describe('prop stability (SD-2635)', () => {
+    it(
+      'does not destroy/re-init when ui prop is a new object literal with identical content',
+      async () => {
+        const ref = createRef<SuperDocRef>();
+        const onReady = vi.fn();
+        const onEditorDestroy = vi.fn();
+        const editor = (ui: SuperDocEditorProps['ui']) => (
+          <SuperDocEditor ref={ref} ui={ui} onReady={onReady} onEditorDestroy={onEditorDestroy} />
+        );
+
+        const { rerender } = render(editor({ comments: false, ruler: { enabled: true } }));
+        await waitFor(() => expect(onReady).toHaveBeenCalled(), { timeout: SUPERDOC_READY_WAIT_TIMEOUT });
+        const instanceBefore = ref.current?.getInstance();
+
+        rerender(editor({ comments: false, ruler: { enabled: true } }));
+
+        expect(ref.current?.getInstance()).toBe(instanceBefore);
+        expect(onEditorDestroy).not.toHaveBeenCalled();
+      },
+      SUPERDOC_READY_TEST_TIMEOUT,
+    );
+
+    it(
+      're-inits when a ui element or function changes, which a JSON compare cannot see',
+      async () => {
+        const ref = createRef<SuperDocRef>();
+        const onReady = vi.fn();
+        const onEditorDestroy = vi.fn();
+        const editor = (container: HTMLElement, menuProvider: () => null) => (
+          <SuperDocEditor
+            ref={ref}
+            ui={{ toolbar: { container }, contextMenu: { menuProvider } }}
+            onReady={onReady}
+            onEditorDestroy={onEditorDestroy}
+          />
+        );
+        const first = document.createElement('div');
+        const provider = () => null;
+        document.body.append(first);
+
+        const { rerender } = render(editor(first, provider));
+        await waitFor(() => expect(onReady).toHaveBeenCalled(), { timeout: SUPERDOC_READY_WAIT_TIMEOUT });
+
+        const second = document.createElement('div');
+        document.body.append(second);
+        rerender(editor(second, provider));
+        await waitFor(() => expect(onEditorDestroy).toHaveBeenCalledTimes(1), { timeout: SUPERDOC_READY_WAIT_TIMEOUT });
+
+        rerender(editor(second, () => null));
+        await waitFor(() => expect(onEditorDestroy).toHaveBeenCalledTimes(2), { timeout: SUPERDOC_READY_WAIT_TIMEOUT });
+      },
+      SUPERDOC_READY_TEST_TIMEOUT,
+    );
+
     it(
       'does not destroy/re-init when user prop is a new object literal with identical content',
       async () => {
