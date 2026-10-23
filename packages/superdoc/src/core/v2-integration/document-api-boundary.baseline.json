@@ -15,7 +15,7 @@
     "host": 2,
     "reviewBridge": 3
   },
-  "internal/toolbar/built-in-toolbar.js": {
+  "internal/toolbar/built-in-toolbar.ts": {
     "firstParty": 2
   },
   "internal/toolbar/built-in/default-items.js": {

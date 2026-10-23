@@ -32,6 +32,7 @@
   "include": [
     "next-env.d.ts",
     "../../packages/superdoc/src/vite-env.d.ts",
+    "../../packages/superdoc/src/shims-vue.d.ts",
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",

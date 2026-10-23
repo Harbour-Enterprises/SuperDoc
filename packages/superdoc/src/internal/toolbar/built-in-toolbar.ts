@@ -25,7 +25,22 @@
 import { EventEmitter } from 'eventemitter3';
 import { executeFirstPartyCommandAsync } from '../../public/ui/create-super-doc-ui.js';
 import { createApp, shallowRef } from 'vue';
+import type { App, Component, ComponentPublicInstance, Ref } from 'vue';
 import { vClickOutside } from '@superdoc/common';
+import type {
+  Editor,
+  SuperDoc,
+  SuperDocExceptionToolbarPayload,
+  ToolbarCustomButton,
+  ToolbarFontOption,
+} from '../../core/types/index.js';
+import type {
+  BorrowedSuperDocUI,
+  CommandState,
+  CustomCommandRegistrationResult,
+  StyleCatalogItem,
+  ToolbarSnapshotSlice,
+} from '../../public/ui/types.js';
 
 import {
   ALL_BUILT_IN_TOOLBAR_ITEM_NAMES,
@@ -49,29 +64,155 @@ import {
 import { renderColorOptions } from './built-in/color-dropdown-helpers.js';
 import { findElementBySelector } from './built-in/general.js';
 
+interface ToolbarItem {
+  type: string;
+  name: Ref<string>;
+  command?: unknown;
+  group: Ref<string>;
+  attributes: Ref<Record<string, unknown>>;
+  disabled: Ref<boolean>;
+  active: Ref<boolean>;
+  expand: Ref<boolean>;
+  nestedOptions: Ref<unknown[]>;
+  label: Ref<unknown>;
+  defaultLabel: Ref<unknown>;
+  icon: Ref<unknown>;
+  selectedValue: Ref<unknown>;
+  allowWithoutEditor: Ref<boolean | undefined>;
+  initiallyDisabled: boolean;
+  isCustomToolbarItem?: boolean;
+  activate(attributes?: Record<string, unknown>, ...args: unknown[]): void;
+  deactivate(): void;
+  setDisabled(state: boolean): void;
+  resetDisabled(): void;
+  onActivate(attributes?: Record<string, unknown>, ...args: unknown[]): unknown;
+}
+
+type ToolbarCommandCallback = (context: {
+  item: ToolbarItem;
+  argument?: unknown;
+  option?: unknown;
+  [key: string]: unknown;
+}) => unknown;
+
+type CustomButtonPayload = { argument?: unknown; option?: unknown };
+
+type ToolbarGroupComposition = Record<string, string[]>;
+
+type ImageFilePicker = ReturnType<typeof createImageFilePicker>;
+
+type ExecuteCommandOptions = {
+  firstParty?: boolean;
+  reportUnhandled?: boolean;
+  onSettled?: () => void;
+  onError?: (error: unknown) => void;
+};
+
+type BuiltInToolbarConfig = {
+  selector: string | HTMLElement | null;
+  element?: string | HTMLElement | null;
+  toolbarGroups: string[];
+  role: string;
+  icons: Record<string, unknown>;
+  texts: Record<string, unknown>;
+  fonts: readonly ToolbarFontOption[] | null;
+  hideButtons: boolean;
+  responsiveToContainer: boolean;
+  mode: string;
+  excludeItems: readonly string[];
+  toolbarButtonsExclude: readonly string[];
+  groups: string[] | ToolbarGroupComposition | null;
+  customButtons: readonly ToolbarCustomButton[];
+  showFormattingMarksButton: boolean;
+  showTableOfContentsButton: boolean;
+  showWatermarkButton: boolean;
+  showPageNumberButton: boolean;
+  uiDisplayFallbackFont?: string;
+};
+
+type BuiltInToolbarOptions = {
+  superdoc?: SuperDoc | null;
+  editor?: Editor | null;
+  selector?: string | HTMLElement | null;
+  element?: string | HTMLElement | null;
+  role?: string;
+  isDev?: boolean;
+  hideButtons?: boolean;
+  responsiveToContainer?: boolean;
+  uiDisplayFallbackFont?: string;
+  [option: string]: unknown;
+};
+
+type DocumentModeUi = { label: unknown; icon: unknown };
+
+const HEADLESS_COMMAND_IDS: Readonly<Record<string, string | undefined>> = HEADLESS_ITEM_MAP;
+const TABLE_ACTION_COMMANDS: Readonly<Record<string, string | undefined>> = TABLE_ACTION_COMMAND_MAP;
+
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    (typeof value === 'object' || typeof value === 'function') &&
+    value !== null &&
+    'then' in value &&
+    typeof value.then === 'function'
+  );
+}
+
+function isToolbarCommandCallback(value: unknown): value is ToolbarCommandCallback {
+  return typeof value === 'function';
+}
+
+function describeError(error: unknown): string {
+  const message =
+    (typeof error === 'object' || typeof error === 'function') && error !== null && 'message' in error
+      ? error.message
+      : undefined;
+  return `${message ?? String(error)}`;
+}
+
+type ListenerTarget = Pick<Document, 'addEventListener' | 'removeEventListener'>;
+
+function isListenerTarget(value: unknown): value is ListenerTarget {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'addEventListener' in value &&
+    typeof value.addEventListener === 'function' &&
+    'removeEventListener' in value &&
+    typeof value.removeEventListener === 'function'
+  );
+}
+
+function hasClosest(target: EventTarget | null): target is EventTarget & Pick<Element, 'closest'> {
+  return target !== null && 'closest' in target && typeof target.closest === 'function';
+}
+
 /**
  * Resolve a legacy built-in item name to its canonical V2 controller command
  * id. The compatibility catalog is the primary truth; a small supplemental map
  * (`HEADLESS_ITEM_MAP`) covers documented items the renderer can surface that
  * are not modeled as catalog rows yet (e.g. table-of-contents, direction).
- * @param {string} name
- * @returns {string|null}
  */
-function resolveCommandId(name) {
-  return resolveToolbarCommandId(name) ?? HEADLESS_ITEM_MAP[name] ?? null;
+function resolveCommandId(name: string): string | null {
+  return resolveToolbarCommandId(name) ?? HEADLESS_COMMAND_IDS[name] ?? null;
 }
 
-function executeCommand(ui, commandId, argument, options = {}) {
+function executeCommand(
+  ui: BorrowedSuperDocUI | null,
+  commandId: string,
+  argument: unknown,
+  options: ExecuteCommandOptions = {},
+): boolean {
   if (!ui?.commands || !commandId) return false;
   if (typeof ui.commands.has === 'function' && !ui.commands.has(commandId)) return false;
-  const execute = typeof ui.commands.executeAsync === 'function' ? ui.commands.executeAsync : ui.commands.execute;
+  const execute: ((id: string, payload?: unknown) => unknown) | undefined =
+    typeof ui.commands.executeAsync === 'function' ? ui.commands.executeAsync : ui.commands.execute;
   if (typeof execute !== 'function') return false;
   const result = options.firstParty
     ? executeFirstPartyCommandAsync(ui, commandId, argument)
     : argument === undefined
       ? execute.call(ui.commands, commandId)
       : execute.call(ui.commands, commandId, argument);
-  const reportFailure = (settled) => {
+  const reportFailure = (settled: unknown) => {
     if (!options.reportUnhandled || settled !== false) return;
     options.onError?.(
       new Error(
@@ -79,7 +220,7 @@ function executeCommand(ui, commandId, argument, options = {}) {
       ),
     );
   };
-  if (result && typeof result.then === 'function') {
+  if (isThenable(result)) {
     void Promise.resolve(result).then(
       (settled) => {
         reportFailure(settled);
@@ -118,7 +259,7 @@ const V1_ENABLED_ON_SELECTION_REASON = new Set([
 ]);
 const V1_ENABLED_ON_EMPTY_REASON = new Set(['list', 'numberedlist']);
 
-function shouldKeepEnabledForV1ToolbarParity(name, commandState) {
+function shouldKeepEnabledForV1ToolbarParity(name: string, commandState: CommandState | undefined): boolean {
   if (name === 'fontFamily' || name === 'fontSize') return true;
   if (
     V1_ENABLED_ON_EMPTY_REASON.has(name) &&
@@ -133,15 +274,14 @@ function shouldKeepEnabledForV1ToolbarParity(name, commandState) {
   return reason === 'range-selection-required' || reason === 'selection-required';
 }
 
-function isToolbarSurface(target) {
+function isToolbarSurface(target: EventTarget | null): boolean {
   return Boolean(
-    target?.closest?.(
-      '[data-editor-ui-surface], .toolbar-dropdown-menu, .sd-toolbar-dropdown-menu, .sd-tooltip-content',
-    ),
+    hasClosest(target) &&
+    target.closest('[data-editor-ui-surface], .toolbar-dropdown-menu, .sd-toolbar-dropdown-menu, .sd-tooltip-content'),
   );
 }
 
-function isSelectionKey(e) {
+function isSelectionKey(e: KeyboardEvent): boolean {
   return ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key);
 }
 
@@ -157,12 +297,9 @@ const RESERVED_TOOLBAR_ITEM_NAMES = new Set([
  * The rendered built-in toolbar. Shape-compatible with the historical
  * `superdoc.toolbar` (`SuperToolbar`) surface so existing docs, examples, the
  * proof lane, and behavior tests resolve against a real object.
- *
- * @class
- * @extends EventEmitter
  */
 export class BuiltInToolbar extends EventEmitter {
-  config = {
+  config: BuiltInToolbarConfig = {
     selector: null,
     toolbarGroups: ['left', 'center', 'right'],
     role: 'editor',
@@ -182,25 +319,30 @@ export class BuiltInToolbar extends EventEmitter {
     showPageNumberButton: false,
   };
 
-  toolbarItems = [];
-  overflowItems = [];
-  #imagePicker = null;
-  #groupItems = new Map();
-  #highlightOptions = new WeakMap();
-  #painterListenersDetach = null;
+  toolbarItems: ToolbarItem[] = [];
+  overflowItems: ToolbarItem[] = [];
+  #imagePicker: ImageFilePicker | null = null;
+  #groupItems = new Map<string, ToolbarItem[]>();
+  #highlightOptions = new WeakMap<ToolbarItem, unknown[]>();
+  #painterListenersDetach: (() => void) | null = null;
   isDev = false;
   role = 'editor';
-  superdoc;
-  toolbarContainer = null;
-  toolbar = null;
-  _detachFontsChanged = null;
-  _linkedStyleOptions = shallowRef([]);
+  superdoc: SuperDoc | null | undefined = undefined;
+  toolbarContainer: HTMLElement | null = null;
+  toolbar: ComponentPublicInstance | null = null;
+  _detachFontsChanged: (() => void) | null = null;
+  _linkedStyleOptions = shallowRef<readonly StyleCatalogItem[]>([]);
+  declare app?: App | null;
+  declare activeEditor: Editor | null;
+  declare ui: BorrowedSuperDocUI | null;
+  declare snapshot: ToolbarSnapshotSlice | null;
+  declare _unsubscribeController: (() => void) | null;
+  declare _detachFormatPainterModeChange: (() => void) | null;
+  declare _customCommandRegs: Map<string, CustomCommandRegistrationResult<CustomButtonPayload>>;
+  declare _reportedInvalidCustomItems: Set<string>;
+  declare _lastFontOptionsSignature: string;
 
-  /**
-   * @param {object} config Toolbar config forwarded by `SuperDoc`. Requires
-   *   `superdoc`; `selector` is the mount target.
-   */
-  constructor(config = {}) {
+  constructor(config: BuiltInToolbarOptions = {}) {
     super();
 
     this.config = { ...this.config, ...config };
@@ -211,8 +353,8 @@ export class BuiltInToolbar extends EventEmitter {
     this.role = config.role || 'editor';
     this.toolbarContainer = null;
 
-    this.config.icons = { ...toolbarIcons, ...config.icons };
-    this.config.texts = { ...toolbarTexts, ...config.texts };
+    this.config.icons = { ...toolbarIcons, ...this.config.icons };
+    this.config.texts = { ...toolbarTexts, ...this.config.texts };
     this.config.hideButtons = config.hideButtons ?? true;
     this.config.responsiveToContainer = config.responsiveToContainer ?? false;
 
@@ -280,7 +422,7 @@ export class BuiltInToolbar extends EventEmitter {
         return;
       }
 
-      this.app = createApp(Toolbar);
+      this.app = createApp(Toolbar as Component);
       this.app.directive('click-outside', vClickOutside);
       this.app.config.globalProperties.$toolbar = this;
       this.toolbar = this.app.mount(this.toolbarContainer);
@@ -308,17 +450,18 @@ export class BuiltInToolbar extends EventEmitter {
     // instance. A host that does not expose one leaves the toolbar in its
     // handle-only state (item lookup works, command state stays inert)
     // instead of quietly spawning a second source of command truth.
-    this.ui = this.superdoc?.ui ?? null;
-    if (!this.ui) return;
-    this.snapshot = this.ui.toolbar.getSnapshot();
-    this._unsubscribeController = this.ui.toolbar.subscribe(() => {
-      this.snapshot = this.ui.toolbar.getSnapshot();
+    const ui = this.superdoc?.ui ?? null;
+    this.ui = ui;
+    if (!ui) return;
+    this.snapshot = ui.toolbar.getSnapshot();
+    this._unsubscribeController = ui.toolbar.subscribe(() => {
+      this.snapshot = ui.toolbar.getSnapshot();
       if (this.getToolbarItemByName('linkedStyles')?.expand.value) {
         this.#refreshLinkedStyleOptions();
       }
       this.updateToolbarState();
     });
-    this._detachFormatPainterModeChange = this.ui.formatPainter.onModeChange((mode) => {
+    this._detachFormatPainterModeChange = ui.formatPainter.onModeChange((mode) => {
       if (mode === 'armed' || mode === 'persistent') {
         this.#armFormatPainterListeners();
       } else {
@@ -395,7 +538,7 @@ export class BuiltInToolbar extends EventEmitter {
     return this.config.responsiveToContainer ? containerWidth : documentWidth;
   }
 
-  #resolveToolbarFonts(configFonts) {
+  #resolveToolbarFonts(configFonts: readonly ToolbarFontOption[] | null) {
     // A consumer-provided `modules.toolbar.fonts` list owns the dropdown verbatim.
     if (configFonts) return configFonts;
     // Otherwise use the host's activation-aware family list (baseline vs rich pack, curation, and
@@ -409,12 +552,12 @@ export class BuiltInToolbar extends EventEmitter {
     const selectedCustomOptions = new Map(
       this.#getAllToolbarItems()
         .filter((item) => item.isCustomToolbarItem && item.type === 'dropdown')
-        .map((item) => [item.name.value, item.selectedValue.value]),
+        .map((item): [string, unknown] => [item.name.value, item.selectedValue.value]),
     );
-    const hasExplicitGroupComposition =
-      this.config.groups && !Array.isArray(this.config.groups) && Object.keys(this.config.groups).length > 0;
-    const configuredItemNames = hasExplicitGroupComposition
-      ? new Set(Object.values(this.config.groups).flatMap((items) => items))
+    const groups = this.config.groups;
+    const groupComposition = groups && !Array.isArray(groups) && Object.keys(groups).length > 0 ? groups : null;
+    const configuredItemNames = groupComposition
+      ? new Set(Object.values(groupComposition).flatMap((items) => items))
       : null;
     // AIDEV-NOTE: SD-5050 - merge legacy `toolbarButtonsExclude` in here, not
     // just `excludeItems`. This runs before `makeDefaultItems` partitions
@@ -463,7 +606,7 @@ export class BuiltInToolbar extends EventEmitter {
           // Named entries key on the name so their diagnostic survives a
           // reorder.
           const identity = item?.name ?? `<unnamed@${index}>`;
-          const signature = `${identity}::${error?.message ?? String(error)}`;
+          const signature = `${identity}::${describeError(error)}`;
           if (!this._reportedInvalidCustomItems.has(signature)) {
             this._reportedInvalidCustomItems.add(signature);
             this.#emitCommandException(error, item?.name ?? null);
@@ -471,22 +614,22 @@ export class BuiltInToolbar extends EventEmitter {
           return null;
         }
       })
-      .filter(Boolean);
-    const configuredGroups = hasExplicitGroupComposition ? new Set(Object.keys(this.config.groups)) : null;
-    const layoutCustomItems = configuredGroups
+      .filter((item) => item !== null);
+    const configuredGroups = new Set(groupComposition ? Object.keys(groupComposition) : []);
+    const layoutCustomItems = groupComposition
       ? customToolbarItems.filter((item) => configuredGroups.has(item.group?.value || 'center'))
       : customToolbarItems;
 
-    let allConfigItems = null;
-    if (hasExplicitGroupComposition) {
-      const groupedItems = Object.values(this.config.groups).flatMap((item) => item);
+    let allConfigItems: string[] | null = null;
+    if (groupComposition) {
+      const groupedItems = Object.values(groupComposition).flatMap((item) => item);
       const groupedCustomItems = customToolbarItems
         .filter((item) => configuredGroups.has(item.group?.value || 'center'))
         .map((item) => item.name.value);
       allConfigItems = [...new Set([...groupedItems, ...groupedCustomItems])];
     }
 
-    const { defaultItems, overflowItems } = makeDefaultItems({
+    const defaultItemsInput = {
       superToolbar: this,
       toolbarIcons: this.config.icons,
       toolbarTexts: this.config.texts,
@@ -506,10 +649,12 @@ export class BuiltInToolbar extends EventEmitter {
       // what the consumer asked for.
       configuredItemOrder: allConfigItems,
       excludedItemNames,
-      additionalItems: layoutCustomItems,
-    });
+      additionalItems: layoutCustomItems as never[],
+    };
+    const { defaultItems, overflowItems }: { defaultItems: ToolbarItem[]; overflowItems: ToolbarItem[] } =
+      makeDefaultItems(defaultItemsInput);
 
-    if (!hasExplicitGroupComposition) {
+    if (allConfigItems === null) {
       allConfigItems = [
         ...defaultItems.map((item) => item.name.value),
         ...overflowItems.map((item) => item.name.value),
@@ -531,9 +676,9 @@ export class BuiltInToolbar extends EventEmitter {
     // as. The array-of-group-names selection shape never sets
     // `hasExplicitGroupComposition`, so it keeps the registry order it has
     // always had.
-    if (hasExplicitGroupComposition) {
+    if (groupComposition) {
       const orderIndex = new Map(allConfigItems.map((name, index) => [name, index]));
-      const rank = (item) => orderIndex.get(item.name.value) ?? Number.MAX_SAFE_INTEGER;
+      const rank = (item: ToolbarItem) => orderIndex.get(item.name.value) ?? Number.MAX_SAFE_INTEGER;
 
       // The overflow trigger is never part of `allConfigItems` (consumers
       // must not name it), and `default-items.js` deliberately does not put
@@ -547,8 +692,8 @@ export class BuiltInToolbar extends EventEmitter {
       const reordered = filteredItems.filter((item) => item !== overflowTrigger);
       reordered.sort((a, b) => rank(a) - rank(b));
       if (overflowTrigger) {
-        const triggerOriginalIndex = originalIndex.get(overflowTrigger);
-        const insertAt = reordered.findIndex((item) => originalIndex.get(item) > triggerOriginalIndex);
+        const triggerOriginalIndex = originalIndex.get(overflowTrigger) ?? -1;
+        const insertAt = reordered.findIndex((item) => (originalIndex.get(item) ?? -1) > triggerOriginalIndex);
         if (insertAt === -1) reordered.push(overflowTrigger);
         else reordered.splice(insertAt, 0, overflowTrigger);
       }
@@ -558,8 +703,8 @@ export class BuiltInToolbar extends EventEmitter {
     }
 
     // Apply explicit per-group placement only for the composition-map shape.
-    if (hasExplicitGroupComposition) {
-      for (const [group, names] of Object.entries(this.config.groups)) {
+    if (groupComposition) {
+      for (const [group, names] of Object.entries(groupComposition)) {
         for (const item of filteredItems) {
           if (names.includes(item.name.value)) item.group.value = group;
         }
@@ -576,23 +721,22 @@ export class BuiltInToolbar extends EventEmitter {
    * on the shared controller so it receives the V2-truthful shared context
    * (`insertText`, `execute`, `doc`, `ui`, ...). The toolbar-specific `option`
    * and `argument` are threaded through the command payload.
-   * @param {object} config
-   * @returns {object} reactive toolbar item
    */
-  #prepareCustomButton(config) {
-    const item = useToolbarItem({ ...config });
+  #prepareCustomButton(config: ToolbarCustomButton): ToolbarItem {
+    const item: ToolbarItem = useToolbarItem({ ...config });
     item.isCustomToolbarItem = true;
     const callback = config.command;
-    if (typeof callback === 'function' && this.ui?.commands?.register) {
+    if (isToolbarCommandCallback(callback) && this.ui?.commands?.register) {
       const id = `__builtin_toolbar__${config.name}`;
       if (!this._customCommandRegs.has(id)) {
-        const reg = this.ui.commands.register({
+        const reg = this.ui.commands.register<CustomButtonPayload>({
           id,
           execute: (context) => {
-            const payload = context?.payload && typeof context.payload === 'object' ? context.payload : {};
+            const payload: CustomButtonPayload =
+              context?.payload && typeof context.payload === 'object' ? context.payload : {};
             try {
               const result = callback({ ...context, item, argument: payload.argument, option: payload.option });
-              if (result && typeof result.then === 'function') {
+              if (isThenable(result)) {
                 return Promise.resolve(result).catch((error) => {
                   this.#emitCommandException(error, config.name);
                   return false;
@@ -629,7 +773,7 @@ export class BuiltInToolbar extends EventEmitter {
   // Public handle API
   // ---------------------------------------------------------------------------
 
-  getToolbarItemByGroup(groupName) {
+  getToolbarItemByGroup(groupName: string): ToolbarItem[] {
     const items = this.toolbarItems.filter((item) => (item.group?.value || 'center') === groupName);
     const previous = this.#groupItems.get(groupName);
     if (previous?.length === items.length && previous.every((item, index) => item === items[index])) return previous;
@@ -638,11 +782,11 @@ export class BuiltInToolbar extends EventEmitter {
     return items;
   }
 
-  getToolbarItemByName(name) {
+  getToolbarItemByName(name: string): ToolbarItem | undefined {
     return this.#getAllToolbarItems().find((item) => item.name.value === name);
   }
 
-  #getAllToolbarItems() {
+  #getAllToolbarItems(): ToolbarItem[] {
     return [...this.toolbarItems, ...this.overflowItems];
   }
 
@@ -656,9 +800,8 @@ export class BuiltInToolbar extends EventEmitter {
    * styles surface is unreachable (viewing mode, worker-backed editor, pre-ready
    * editor). Applying a style still routes through the shared `linked-style`
    * command, which targets `styles.paragraph.setStyle`.
-   * @returns {Array}
    */
-  getLinkedStyleOptions() {
+  getLinkedStyleOptions(): readonly StyleCatalogItem[] {
     this.#refreshLinkedStyleOptions();
     return this._linkedStyleOptions.value;
   }
@@ -674,9 +817,8 @@ export class BuiltInToolbar extends EventEmitter {
    * The stable style id active across the current selection's paragraph(s), or
    * `null` for a mixed selection / when the styles surface is unreachable. Used
    * to mark the active option in the linked-styles dropdown.
-   * @returns {string|null}
    */
-  getActiveLinkedStyleId() {
+  getActiveLinkedStyleId(): string | null {
     return this.ui?.styles?.getActiveParagraphStyle?.()?.styleId ?? null;
   }
 
@@ -685,9 +827,8 @@ export class BuiltInToolbar extends EventEmitter {
    * The shared controller already tracks selection/transaction state, so this
    * just refreshes font options (the new document may carry different fonts) and
    * re-projects item state.
-   * @param {object|null} editor
    */
-  setActiveEditor(editor) {
+  setActiveEditor(editor: Editor | null) {
     this.activeEditor = editor;
     const signature = this.#fontOptionsSignature();
     if (signature !== this._lastFontOptionsSignature) {
@@ -707,7 +848,7 @@ export class BuiltInToolbar extends EventEmitter {
   // State projection (consumes the shared controller snapshot)
   // ---------------------------------------------------------------------------
 
-  #hostRoutedActive(name) {
+  #hostRoutedActive(name: string): boolean {
     if (name === 'ruler') return Boolean(this.superdoc?.config?.rulers);
     if (name === 'formattingMarks') {
       return Boolean(this.superdoc?.config?.layoutEngineOptions?.showFormattingMarks);
@@ -715,7 +856,7 @@ export class BuiltInToolbar extends EventEmitter {
     return false;
   }
 
-  #canRunHostAction(name) {
+  #canRunHostAction(name: string): boolean {
     if (name === 'watermark') {
       return this.ui?.document?.getSnapshot?.().ready === true && typeof this.ui?.watermark?.open === 'function';
     }
@@ -734,11 +875,15 @@ export class BuiltInToolbar extends EventEmitter {
     if (!documentModeItem) return;
 
     const snapshotMode = this.snapshot?.commands?.['document-mode']?.value;
-    const mode = (snapshotMode || 'editing').toLowerCase();
+    const mode = String(snapshotMode || 'editing').toLowerCase();
     const texts = this.config.texts || {};
     const icons = this.config.icons || {};
-    const map = {
-      editing: { label: texts.documentEditingMode || 'Editing', icon: icons.documentEditingMode || icons.documentMode },
+    const editing: DocumentModeUi = {
+      label: texts.documentEditingMode || 'Editing',
+      icon: icons.documentEditingMode || icons.documentMode,
+    };
+    const map: Readonly<Record<string, DocumentModeUi | undefined>> = {
+      editing,
       suggesting: {
         label: texts.documentSuggestingMode || 'Suggesting',
         icon: icons.documentSuggestingMode || icons.documentMode,
@@ -746,7 +891,7 @@ export class BuiltInToolbar extends EventEmitter {
       viewing: { label: texts.documentViewingMode || 'Viewing', icon: icons.documentViewingMode || icons.documentMode },
     };
 
-    const next = map[mode] || map.editing;
+    const next = map[mode] || editing;
     if (documentModeItem.label?.value !== undefined) documentModeItem.label.value = next.label;
     if (documentModeItem.defaultLabel?.value !== undefined) documentModeItem.defaultLabel.value = next.label;
     if (documentModeItem.icon?.value !== undefined && next.icon) documentModeItem.icon.value = next.icon;
@@ -766,18 +911,18 @@ export class BuiltInToolbar extends EventEmitter {
     highlightItem.nestedOptions.value = options;
   }
 
-  #isFontSizeMixedState(commandState) {
+  #isFontSizeMixedState(commandState: CommandState | undefined): boolean {
     return Boolean(commandState?.active) && commandState?.value == null;
   }
 
   // Inline font-family marks never report `active` (the descriptor has no
   // `activeMark`), so a selection spanning multiple families surfaces as an
   // enabled command with no resolved value. Treat that as the mixed state.
-  #isFontFamilyMixedState(commandState) {
-    return Boolean(commandState) && commandState.disabled === false && commandState.value == null;
+  #isFontFamilyMixedState(commandState: CommandState | undefined): boolean {
+    return Boolean(commandState) && commandState?.disabled === false && commandState?.value == null;
   }
 
-  #applyHeadlessState(item) {
+  #applyHeadlessState(item: ToolbarItem): boolean {
     const name = item.name.value;
 
     if (item.isCustomToolbarItem && typeof item.command === 'string') {
@@ -826,7 +971,7 @@ export class BuiltInToolbar extends EventEmitter {
     if (shouldKeepEnabledForV1ToolbarParity(name, commandState)) item.setDisabled(false);
     else item.setDisabled(Boolean(commandState?.disabled));
 
-    const handlers = {
+    const handlers: { default: () => void; [name: string]: (() => void) | undefined } = {
       textAlign: () => {
         if (commandState?.value) item.activate({ textAlign: commandState.value });
         else item.deactivate();
@@ -853,7 +998,11 @@ export class BuiltInToolbar extends EventEmitter {
         // Write only the href: `attributes` also carries the item's static
         // configuration, `ariaLabel` among it, and this runs on every sync.
         const href = commandState?.value ?? null;
-        if (href ? item.attributes.value?.href !== href : Object.hasOwn(item.attributes.value ?? {}, 'href')) {
+        if (
+          href
+            ? item.attributes.value?.href !== href
+            : Object.prototype.hasOwnProperty.call(item.attributes.value ?? {}, 'href')
+        ) {
           item.attributes.value = withLinkHref(item.attributes.value, href);
         }
       },
@@ -889,8 +1038,10 @@ export class BuiltInToolbar extends EventEmitter {
       },
       linkedStyles: () => {
         const value = commandState?.value;
-        const styleId = typeof value === 'string' ? value : value?.styleId;
-        const styleName = value && typeof value === 'object' ? value.styleName : null;
+        const styleValue = typeof value === 'object' && value !== null ? value : null;
+        const styleId =
+          typeof value === 'string' ? value : styleValue && 'styleId' in styleValue ? styleValue.styleId : undefined;
+        const styleName = styleValue ? ('styleName' in styleValue ? styleValue.styleName : undefined) : null;
         if (styleId) item.activate({ styleId, styleName });
         else item.label.value = this.config.texts?.formatText || 'Format text';
       },
@@ -966,10 +1117,10 @@ export class BuiltInToolbar extends EventEmitter {
   // Command execution (routes through the shared controller)
   // ---------------------------------------------------------------------------
 
-  #runHostAction(name, argument) {
+  #runHostAction(name: string, argument: unknown): boolean {
     const superdoc = this.superdoc;
     if (name === 'watermark') {
-      if (!this.#canRunHostAction(name)) return false;
+      if (!this.#canRunHostAction(name) || !this.ui) return false;
       const result = this.ui.watermark.open();
       if (!result.ok) throw new Error(`[superdoc toolbar] Watermark dialog unavailable: ${result.reason}`);
       return true;
@@ -997,14 +1148,11 @@ export class BuiltInToolbar extends EventEmitter {
   /**
    * Execute the controller-backed command for an item through the shared
    * controller. Returns true when handled.
-   * @param {object} item
-   * @param {unknown} argument
-   * @returns {boolean}
    */
-  #executeControllerCommand(item, argument) {
+  #executeControllerCommand(item: ToolbarItem, argument: unknown): boolean {
     const name = item?.name?.value;
     if (!name) return false;
-    const callbacks = {
+    const callbacks: ExecuteCommandOptions = {
       firstParty: true,
       onSettled: () => this.updateToolbarState(),
       onError: (error) => this.#emitCommandException(error, name),
@@ -1017,7 +1165,9 @@ export class BuiltInToolbar extends EventEmitter {
     }
 
     if (name === 'tableActions') {
-      const commandId = TABLE_ACTION_COMMAND_MAP[argument?.command];
+      const tableAction =
+        typeof argument === 'object' && argument !== null && 'command' in argument ? argument.command : undefined;
+      const commandId = typeof tableAction === 'string' ? TABLE_ACTION_COMMANDS[tableAction] : undefined;
       if (!commandId) return false;
       return executeCommand(this.ui, commandId, undefined, callbacks);
     }
@@ -1038,9 +1188,8 @@ export class BuiltInToolbar extends EventEmitter {
    * controller `image` command (`create.image`) as a base64 data-URI payload.
    * Returns true — the picker flow owns the command from here (a cancelled
    * native dialog is a plain no-op).
-   * @returns {boolean}
    */
-  #startImagePick() {
+  #startImagePick(): boolean {
     // Fail closed when the controller reports the command unavailable
     // (viewing mode / no editor); the button is disabled in that state.
     const commandState = this.snapshot?.commands?.['image'];
@@ -1070,27 +1219,28 @@ export class BuiltInToolbar extends EventEmitter {
 
   #armFormatPainterListeners() {
     if (this.#painterListenersDetach) return;
-    const container = this.superdoc?.activeEditor?.container ?? document;
+    const editorContainer = this.superdoc?.activeEditor?.container;
+    const container: ListenerTarget = isListenerTarget(editorContainer) ? editorContainer : document;
 
-    const onPointerDown = (e) => {
+    const onPointerDown = (e: PointerEvent) => {
       if (isToolbarSurface(e.target)) return;
-      this.ui.formatPainter.setPointerSelecting(true);
+      this.ui?.formatPainter.setPointerSelecting(true);
     };
-    const onPointerUp = (e) => {
-      this.ui.formatPainter.setPointerSelecting(false);
+    const onPointerUp = (e: PointerEvent) => {
+      this.ui?.formatPainter.setPointerSelecting(false);
       if (isToolbarSurface(e.target)) return;
-      this.ui.formatPainter.notifyPointerUp();
+      this.ui?.formatPainter.notifyPointerUp();
     };
-    const onKeyDown = (e) => {
+    const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        this.ui.formatPainter.cancel();
+        this.ui?.formatPainter.cancel();
         return;
       }
-      if (isSelectionKey(e)) this.ui.formatPainter.setKeyboardSelecting(true);
+      if (isSelectionKey(e)) this.ui?.formatPainter.setKeyboardSelecting(true);
     };
     const onKeyUp = () => {
-      this.ui.formatPainter.setKeyboardSelecting(false);
-      this.ui.formatPainter.notifyKeyUp();
+      this.ui?.formatPainter.setKeyboardSelecting(false);
+      this.ui?.formatPainter.notifyKeyUp();
     };
 
     container.addEventListener('pointerdown', onPointerDown);
@@ -1113,9 +1263,9 @@ export class BuiltInToolbar extends EventEmitter {
     }
   }
 
-  #emitCommandException(originalError, name) {
+  #emitCommandException(originalError: unknown, name: string | null | undefined) {
     const error = originalError instanceof Error ? originalError : new Error(String(originalError));
-    const payload = {
+    const payload: SuperDocExceptionToolbarPayload = {
       error,
       originalError,
       itemName: name ?? null,
@@ -1143,9 +1293,8 @@ export class BuiltInToolbar extends EventEmitter {
 
   /**
    * Main toolbar command entry point used by the rendered components.
-   * @param {{ item: object, argument?: unknown, option?: unknown }} params
    */
-  emitCommand({ item, argument, option }) {
+  emitCommand({ item, argument, option }: { item: ToolbarItem; argument?: unknown; option?: unknown }) {
     const name = item?.name?.value;
     const { command } = item;
 
@@ -1177,14 +1326,14 @@ export class BuiltInToolbar extends EventEmitter {
 
       // Custom buttons carry a function command; route through their registered
       // shared-context command so they get `insertText` / `execute` / `doc`.
-      if (typeof command === 'function') {
+      if (isToolbarCommandCallback(command)) {
         const id = `__builtin_toolbar__${name}`;
         if (this._customCommandRegs.has(id) && this.ui?.commands?.execute) {
           this.ui.commands.execute(id, { argument, option });
         } else {
           // Fallback for a command function that was never registered.
           const result = command({ item, argument, option, ui: this.ui, superdoc: this.superdoc });
-          if (result && typeof result.then === 'function') {
+          if (isThenable(result)) {
             void Promise.resolve(result).catch((error) => this.#emitCommandException(error, name));
           }
         }
@@ -1229,9 +1378,7 @@ export class BuiltInToolbar extends EventEmitter {
 
 /**
  * Create the rendered built-in toolbar for a `SuperDoc` instance.
- * @param {object} config
- * @returns {BuiltInToolbar}
  */
-export function createBuiltInToolbar(config) {
+export function createBuiltInToolbar(config: BuiltInToolbarOptions): BuiltInToolbar {
   return new BuiltInToolbar(config);
 }
