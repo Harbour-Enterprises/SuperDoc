@@ -1,178 +1,246 @@
-/* global CSS, queueMicrotask */
 import { markRaw } from 'vue';
+import type { HyperlinkTarget, TextAddress } from '@superdoc/document-api';
 import LinkInput from '../internal/toolbar/built-in/LinkInput.vue';
 import { scrollToElement } from '../internal/toolbar/built-in/scroll-helpers.js';
 import { isPlainObject } from '../helpers/object-guards.js';
+import type { SurfaceManager } from '../core/surface-manager.js';
+import type {
+  DirectSurfaceRequest,
+  DocumentMode,
+  Editor,
+  ExternalSurfaceRenderContext,
+  HyperlinkActivationContext,
+  HyperlinkActivationHandler,
+  HyperlinkActivationResult,
+  LinkPopoverContext,
+  LinkPopoverResolution,
+  LinkPopoverResolver,
+  SurfaceHandle,
+  SurfaceOutcome,
+  SurfaceRequest,
+} from '../core/types/index.js';
+import type { SuperDocUI } from '../public/ui/types.js';
 
-/** @typedef {import('../core/types/index.js').HyperlinkActivationContext} HyperlinkActivationContext */
-/** @typedef {import('../core/types/index.js').HyperlinkActivationResult} HyperlinkActivationResult */
-/** @typedef {import('../core/types/index.js').HyperlinkActivationHandler} HyperlinkActivationHandler */
-/** @typedef {import('../core/types/index.js').LinkPopoverResolution} LinkPopoverResolution */
-/** @typedef {import('../core/types/index.js').LinkPopoverResolver} LinkPopoverResolver */
-/** @typedef {HyperlinkActivationResult | LinkPopoverResolution} HyperlinkActivationResolution */
-/** @typedef {import('../core/surface-manager.js').SurfaceManager} SurfaceManager */
-/** @typedef {import('../core/types/index.js').SurfaceHandle} SurfaceHandle */
-/** @typedef {import('../core/types/index.js').SurfaceOutcome} SurfaceOutcome */
-/** @typedef {import('../core/types/index.js').SurfaceRequest} SurfaceRequest */
-/** @typedef {import('../core/types/index.js').DirectSurfaceRequest} DirectSurfaceRequest */
-/** @typedef {import('../core/types/index.js').ExternalSurfaceRenderContext} ExternalSurfaceRenderContext */
-/** @typedef {import('../core/types/index.js').DocumentMode} DocumentMode */
-/** @typedef {import('../core/types/index.js').Editor} Editor */
-/** @typedef {import('../public/ui/types.js').SuperDocUI} SuperDocUI */
-/** @typedef {import('@superdoc/document-api').HyperlinkTarget} HyperlinkTarget */
-/** @typedef {{ getHandles?: () => { editing?: { input?: { runAfterPendingInput?: (action: (signal?: AbortSignal) => Promise<boolean>) => Promise<boolean> } } } }} LinkNavigationHost */
+type HyperlinkActivationResolution = HyperlinkActivationResult | LinkPopoverResolution;
+
+type ApplicationHyperlinkResolution =
+  | Extract<LinkPopoverResolution, { type: 'external' }>
+  | Extract<HyperlinkActivationResult, { type: 'render' }>;
+
+interface LinkNavigationHost {
+  getHandles?: () => {
+    editing?: {
+      input?: { runAfterPendingInput?: (action: (signal?: AbortSignal) => Promise<boolean>) => Promise<boolean> };
+    };
+  };
+}
+
+interface TextSelectionPoint {
+  kind: 'text';
+  blockId: string;
+  offset: number;
+}
 
 /**
  * A single-block text-selection target in the Document API `query.match`
  * result shape.
- * @typedef {Object} TextSelectionTarget
- * @property {'selection'} kind
- * @property {{ kind: 'text', blockId: string, offset: number }} start
- * @property {{ kind: 'text', blockId: string, offset: number }} end
  */
+interface TextSelectionTarget {
+  kind: 'selection';
+  start: TextSelectionPoint;
+  end: TextSelectionPoint;
+}
 
-/**
- * Block-anchored address carried by a hyperlink record.
- * @typedef {Object} HyperlinkAddressShape
- * @property {{ start?: { blockId?: string, offset?: number }, end?: { blockId?: string, offset?: number } }} [anchor]
- */
+/** Block-anchored address carried by a hyperlink record. */
+interface HyperlinkAddressShape {
+  anchor?: { start?: { blockId?: string; offset?: number }; end?: { blockId?: string; offset?: number } };
+}
 
 /**
  * The subset of a Document API hyperlink record this composable reads. The
  * records come from the async `doc.hyperlinks` facade, so every field is
  * optional here.
- * @typedef {Object} HyperlinkRecord
- * @property {string} [rId]
- * @property {string} [text]
- * @property {string} [externalTarget]
- * @property {string} [anchor]
- * @property {string} [targetKind]
- * @property {string} [hyperlinkNodeId]
- * @property {HyperlinkTarget | HyperlinkAddressShape} [address]
  */
+interface HyperlinkRecord {
+  rId?: string;
+  text?: string;
+  externalTarget?: string;
+  anchor?: string;
+  targetKind?: string;
+  hyperlinkNodeId?: string;
+  address?: HyperlinkTarget | HyperlinkAddressShape;
+}
 
-/**
- * A block record as read from `doc.blocks.list()`.
- * @typedef {Object} BlockRecord
- * @property {number} [ordinal]
- * @property {string} [nodeId]
- */
+/** A block record as read from `doc.blocks.list()`. */
+interface BlockRecord {
+  ordinal?: number;
+  nodeId?: string;
+}
 
-/**
- * Result of `doc.blocks.list()` as read here.
- * @typedef {Object} BlocksListResult
- * @property {BlockRecord[]} [blocks]
- */
+/** Result of `doc.blocks.list()` as read here. */
+interface BlocksListResult {
+  blocks?: BlockRecord[];
+}
 
-/**
- * One item of a `doc.query.match` result as read here.
- * @typedef {Object} QueryMatchItem
- * @property {TextSelectionTarget} [target]
- */
+/** One item of a `doc.query.match` result as read here. */
+interface QueryMatchItem {
+  target?: TextSelectionTarget;
+}
 
-/**
- * Result of `doc.query.match` as read here.
- * @typedef {Object} QueryMatchResult
- * @property {QueryMatchItem[]} [items]
- */
+/** Result of `doc.query.match` as read here. */
+interface QueryMatchResult {
+  items?: QueryMatchItem[];
+}
 
-/**
- * One story entry of a `doc.hyperlinks.list()` result.
- * @typedef {Object} HyperlinkStory
- * @property {string} [storyId]
- * @property {string} [partUri]
- * @property {HyperlinkRecord[]} [hyperlinks]
- */
+/** One story entry of a `doc.hyperlinks.list()` result. */
+interface HyperlinkStory {
+  storyId?: string;
+  partUri?: string;
+  hyperlinks?: HyperlinkRecord[];
+}
 
-/**
- * Result of `doc.hyperlinks.list()` as read here.
- * @typedef {Object} HyperlinksListResult
- * @property {HyperlinkStory[]} [stories]
- */
+/** Result of `doc.hyperlinks.list()` as read here. */
+interface HyperlinksListResult {
+  stories?: HyperlinkStory[];
+}
 
-/**
- * Result of `doc.hyperlinks.get()` as read here.
- * @typedef {Object} HyperlinkGetResult
- * @property {boolean} [success]
- * @property {HyperlinkRecord} [hyperlink]
- */
+/** Result of `doc.hyperlinks.get()` as read here. */
+interface HyperlinkGetResult {
+  success?: boolean;
+  hyperlink?: HyperlinkRecord;
+}
 
 /**
  * Result of `doc.bookmarks.get()` as read here (Document API `BookmarkInfo`).
  * `range.from.blockId` identifies the model paragraph sent to the viewport.
  * `address.story` is populated for non-body bookmarks (omitted for body),
  * which keeps anchor navigation scoped to body targets.
- * @typedef {Object} BookmarkGetResult
- * @property {{ story?: { kind?: string, storyType?: string } }} [address]
- * @property {{ from?: { blockId?: string, offset?: number } }} [range]
- * @property {{ colFirst: number, colLast: number }} [tableColumn]
  */
+interface BookmarkGetResult {
+  address?: { story?: { kind?: string; storyType?: string } };
+  range?: { from?: { blockId?: string; offset?: number } };
+  tableColumn?: { colFirst: number; colLast: number };
+}
+
+type MaybePromise<T> = T | Promise<T>;
 
 /**
- * The narrow Document API subset this composable reads. The host facade
- * (`Editor['doc']`) carries no typed surface, so the facades and their results
- * are declared structurally here with every field optional; the call sites
- * keep their runtime narrowing (`Array.isArray`, `typeof`, `?.`) before use.
- * The async-capable facades may return promises, so their results are awaited
- * through `Promise.resolve(...)`.
- * @typedef {Object} LinkPopoverDocumentApi
- * @property {{ list?: () => BlocksListResult | null | undefined } | null} [blocks]
- * @property {{ match?: (query: { select: { type: 'text', pattern: string, caseSensitive: boolean }, require: 'any' }) => QueryMatchResult | null | undefined } | null} [query]
- * @property {{ list?: () => HyperlinksListResult | Promise<HyperlinksListResult | null | undefined> | null | undefined, get?: (input: { storyId: string, hyperlinkNodeId: string }) => HyperlinkGetResult | Promise<HyperlinkGetResult | null | undefined> | null | undefined } | null} [hyperlinks]
- * @property {{ list?: () => Promise<{ items: Array<{ name: string }> }> | { items: Array<{ name: string }> }, get?: (input: { target: { kind: 'entity', entityType: 'bookmark', name: string } }) => BookmarkGetResult | Promise<BookmarkGetResult | null | undefined> | null | undefined } | null} [bookmarks]
+ * The narrow Document API subset this composable reads. The facades and their
+ * results are declared structurally here with every field optional; the call
+ * sites keep their runtime narrowing (`Array.isArray`, `typeof`, `?.`) before
+ * use. The async-capable facades may return promises, so their results are
+ * awaited through `Promise.resolve(...)`.
  */
+interface LinkPopoverDocumentApi {
+  blocks?: { list?: () => BlocksListResult | null | undefined } | null;
+  query?: {
+    match?: (query: {
+      select: { type: 'text'; pattern: string; caseSensitive: boolean };
+      require: 'any';
+    }) => QueryMatchResult | null | undefined;
+  } | null;
+  hyperlinks?: {
+    list?: () => MaybePromise<HyperlinksListResult | null | undefined>;
+    get?: (input: { storyId: string; hyperlinkNodeId: string }) => MaybePromise<HyperlinkGetResult | null | undefined>;
+  } | null;
+  bookmarks?: {
+    list?: () => MaybePromise<{ items: Array<{ name: string }> }>;
+    get?: (input: {
+      target: { kind: 'entity'; entityType: 'bookmark'; name: string };
+    }) => MaybePromise<BookmarkGetResult | null | undefined>;
+  } | null;
+}
 
 /**
  * The `v2-link-click` payload the shell relays from the v2 host's
  * `onLinkClick` callback.
- * @typedef {Object} LinkClickPayload
- * @property {string} href
- * @property {string | null} target
- * @property {string | null} rel
- * @property {string | null} tooltip
- * @property {HTMLAnchorElement} element
- * @property {number} clientX
- * @property {number} clientY
- * @property {DocumentMode} documentMode
- * @property {boolean} [editableText]
  */
+interface LinkClickPayload {
+  href: string;
+  target: string | null;
+  rel: string | null;
+  tooltip: string | null;
+  element: HTMLAnchorElement;
+  clientX: number;
+  clientY: number;
+  documentMode: DocumentMode;
+  editableText?: boolean;
+}
 
-/**
- * Hyperlink identity resolved from the Document API for a clicked anchor.
- * @typedef {Object} ResolvedHyperlinkTarget
- * @property {string} storyId
- * @property {string | undefined} hyperlinkNodeId
- * @property {string} href
- * @property {string | undefined} text
- * @property {string | undefined} targetKind
- * @property {HyperlinkTarget | undefined} address
- * @property {TextSelectionTarget | null} textTarget
- */
+/** Hyperlink identity resolved from the Document API for a clicked anchor. */
+interface ResolvedHyperlinkTarget {
+  storyId: string;
+  hyperlinkNodeId: string | undefined;
+  href: string;
+  text: string | undefined;
+  targetKind: string | undefined;
+  address: HyperlinkTarget | undefined;
+  textTarget: TextSelectionTarget | null;
+}
+
+interface PaintedSourceRef {
+  partUri?: string;
+  xpathLikePath?: string;
+}
+
+interface ActivePopover {
+  href: string;
+  element: HTMLAnchorElement;
+  handle: SurfaceHandle;
+  pointerDownTarget: EventTarget | null;
+  unbindPointerDown: (() => void) | null;
+}
+
+interface AnchorNavigationOptions {
+  placeCaret?: boolean;
+  revalidateCaretAfterReveal?: boolean;
+}
+
+interface UseLinkPopoverOptions {
+  getSurfaceManager: () => SurfaceManager | null | undefined;
+  getActiveEditor: () => Editor | null | undefined;
+  getUi: () => SuperDocUI | null | undefined;
+  getActivationHandler: () => HyperlinkActivationHandler | LinkPopoverResolver | null | undefined;
+  getActivationHandlerSource?: () => 'hyperlinks.onActivate' | 'compatibility' | null | undefined;
+  getBuiltInEditorDisabled?: () => boolean;
+  shouldInterceptNavigationOnlyHyperlinks?: () => boolean;
+  getLayerElement: () => HTMLElement | null | undefined;
+  emitException: (payload: { error: Error; source: string }) => void;
+}
 
 const FLOATING_SURFACE_ID = 'link-popover';
 const RECENT_OUTSIDE_CLOSE_MS = 500;
 const MAX_ANCHOR_NAVIGATION_STEPS = 4;
 
-/**
- * @param {unknown} value
- * @returns {boolean}
- */
-const isThenable = (value) =>
+const isThenable = (value: unknown): boolean =>
   Boolean(
     value &&
     (typeof value === 'object' || typeof value === 'function') &&
-    typeof (/** @type {{ then?: unknown }} */ (value).then) === 'function',
+    'then' in value &&
+    typeof value.then === 'function',
   );
 
-/**
- * @param {unknown} value
- * @returns {value is Record<string, unknown>}
- */
-/**
- * @param {unknown} value
- * @returns {value is HyperlinkTarget}
- */
-function isHyperlinkTarget(value) {
+function isLinkPopoverDocumentApi(value: unknown): value is LinkPopoverDocumentApi {
+  return isPlainObject(value) || typeof value === 'function';
+}
+
+function linkPopoverDocumentApi(editor: Editor | null | undefined): LinkPopoverDocumentApi | null {
+  const doc: unknown = editor?.doc;
+  return isLinkPopoverDocumentApi(doc) ? doc : null;
+}
+
+function isLinkNavigationHost(value: unknown): value is LinkNavigationHost {
+  return isPlainObject(value) || typeof value === 'function';
+}
+
+function markRawComponent(component: unknown): unknown {
+  if ((typeof component === 'object' && component !== null) || typeof component === 'function') {
+    return markRaw(component);
+  }
+  return component;
+}
+
+function isHyperlinkTarget(value: unknown): value is HyperlinkTarget {
   if (!isPlainObject(value) || value.kind !== 'inline' || value.nodeType !== 'hyperlink') return false;
   const anchor = isPlainObject(value.anchor) ? value.anchor : null;
   const start = anchor && isPlainObject(anchor.start) ? anchor.start : null;
@@ -185,11 +253,7 @@ function isHyperlinkTarget(value) {
   );
 }
 
-/**
- * @param {unknown} value
- * @returns {value is HyperlinkActivationResolution}
- */
-function isValidResolution(value) {
+function isValidResolution(value: unknown): value is HyperlinkActivationResolution {
   if (!isPlainObject(value)) return false;
   if (value.type === 'default' || value.type === 'suppress' || value.type === 'none') return true;
   if (value.type === 'custom') return value.component != null;
@@ -198,19 +262,11 @@ function isValidResolution(value) {
   return false;
 }
 
-/**
- * @param {unknown} error
- * @returns {Error}
- */
-function toError(error) {
+function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-/**
- * @param {string | null | undefined} rel
- * @returns {string}
- */
-function linkOpenFeatures(rel) {
+function linkOpenFeatures(rel: string | null | undefined): string {
   if (typeof rel !== 'string') return '';
   return rel
     .split(/\s+/)
@@ -220,12 +276,7 @@ function linkOpenFeatures(rel) {
     .join(',');
 }
 
-/**
- * @param {string | null | undefined} rel
- * @param {string} target
- * @returns {string}
- */
-function linkOpenFeaturesForTarget(rel, target) {
+function linkOpenFeaturesForTarget(rel: string | null | undefined, target: string): string {
   const features = linkOpenFeatures(rel);
   if (target !== '_blank') return features;
   const tokens = features ? features.split(',') : [];
@@ -233,20 +284,12 @@ function linkOpenFeaturesForTarget(rel, target) {
   return tokens.join(',');
 }
 
-/**
- * @param {string} value
- * @returns {string}
- */
-function cssEscape(value) {
+function cssEscape(value: string): string {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value);
   return String(value).replace(/['"\\]/g, '\\$&');
 }
 
-/**
- * @param {string} value
- * @returns {string}
- */
-function decodeAnchorFragment(value) {
+function decodeAnchorFragment(value: string): string {
   try {
     return decodeURIComponent(value);
   } catch {
@@ -254,21 +297,12 @@ function decodeAnchorFragment(value) {
   }
 }
 
-/**
- * @typedef {Object} PaintedSourceRef
- * @property {string} [partUri]
- * @property {string} [xpathLikePath]
- */
-
-/**
- * @param {HTMLElement | null | undefined} element
- * @returns {PaintedSourceRef | null}
- */
-function readPaintedSourceRef(element) {
+function readPaintedSourceRef(element: HTMLElement | null | undefined): PaintedSourceRef | null {
   const encoded = element?.dataset?.sourceAnchor;
   if (!encoded) return null;
   try {
-    const sourceRef = JSON.parse(encoded)?.sourceRef;
+    const parsed: unknown = JSON.parse(encoded);
+    const sourceRef = isPlainObject(parsed) ? parsed.sourceRef : undefined;
     if (!isPlainObject(sourceRef)) return null;
     const partUri = typeof sourceRef.partUri === 'string' ? sourceRef.partUri : undefined;
     const xpathLikePath = typeof sourceRef.xpathLikePath === 'string' ? sourceRef.xpathLikePath : undefined;
@@ -278,37 +312,27 @@ function readPaintedSourceRef(element) {
   }
 }
 
-/**
- * @param {HTMLElement | null | undefined} fragment
- * @returns {number | null}
- */
-function readSourceParagraphOrdinal(fragment) {
+function readSourceParagraphOrdinal(fragment: HTMLElement | null | undefined): number | null {
   const path = readPaintedSourceRef(fragment)?.xpathLikePath;
   const match = path?.match(/w:p\[ordinal=(\d+)\]/);
   return match ? Number(match[1]) : null;
 }
 
-/**
- * @param {HTMLElement | null | undefined} fragment
- * @param {LinkPopoverDocumentApi | null | undefined} doc
- * @returns {string | undefined}
- */
-function readApiBlockId(fragment, doc) {
+function readApiBlockId(
+  fragment: HTMLElement | null | undefined,
+  doc: LinkPopoverDocumentApi | null | undefined,
+): string | undefined {
   const ordinal = readSourceParagraphOrdinal(fragment);
   const blocks = doc?.blocks?.list?.()?.blocks;
   const block = Array.isArray(blocks) ? blocks.find((candidate) => candidate.ordinal === ordinal) : null;
   return typeof block?.nodeId === 'string' ? block.nodeId : fragment?.dataset?.blockId;
 }
 
-/**
- * @param {HTMLAnchorElement} element
- * @param {LinkPopoverDocumentApi | null | undefined} doc
- * @returns {TextSelectionTarget | null}
- */
-function readClickedTextTarget(element, doc) {
-  // `closest()` returns `Element`; painted block fragments are HTML elements
-  // (the code below reads `dataset`), so narrow the DOM type here.
-  const fragment = /** @type {HTMLElement | null | undefined} */ (element?.closest?.('[data-block-id][data-pm-start]'));
+function readClickedTextTarget(
+  element: HTMLAnchorElement,
+  doc: LinkPopoverDocumentApi | null | undefined,
+): TextSelectionTarget | null {
+  const fragment = element?.closest?.<HTMLElement>('[data-block-id][data-pm-start]');
   const blockId = readApiBlockId(fragment, doc);
   if (!blockId || !fragment || !element?.ownerDocument) return null;
   const pmStart = Number(element?.dataset?.pmStart);
@@ -350,28 +374,16 @@ function readClickedTextTarget(element, doc) {
   };
 }
 
-/**
- * @param {HTMLAnchorElement} element
- * @returns {string | null}
- */
-function readClickedPartUri(element) {
-  const sourceElement = /** @type {HTMLElement | null} */ (element?.closest?.('[data-source-anchor]'));
+function readClickedPartUri(element: HTMLAnchorElement): string | null {
+  const sourceElement = element?.closest?.<HTMLElement>('[data-source-anchor]');
   return readPaintedSourceRef(sourceElement)?.partUri ?? null;
 }
 
-/**
- * @param {string} value
- * @returns {string}
- */
-function normalizePartUri(value) {
+function normalizePartUri(value: string): string {
   return value.startsWith('/') ? value : `/${value}`;
 }
 
-/**
- * @param {string} value
- * @returns {string}
- */
-function normalizeHrefForMatch(value) {
+function normalizeHrefForMatch(value: string): string {
   if (typeof value !== 'string') return '';
   try {
     return new URL(value, window.location.href).href;
@@ -380,21 +392,15 @@ function normalizeHrefForMatch(value) {
   }
 }
 
-/**
- * @param {HyperlinkRecord} hyperlink
- * @returns {string}
- */
-function hrefFromHyperlink(hyperlink) {
+function hrefFromHyperlink(hyperlink: HyperlinkRecord): string {
   if (typeof hyperlink?.externalTarget === 'string' && hyperlink.externalTarget) return hyperlink.externalTarget;
   if (typeof hyperlink?.anchor === 'string' && hyperlink.anchor) return `#${hyperlink.anchor}`;
   return '';
 }
 
-/**
- * @param {HyperlinkAddressShape | HyperlinkTarget | null | undefined} address
- * @returns {TextSelectionTarget | null}
- */
-function textTargetFromHyperlinkAddress(address) {
+function textTargetFromHyperlinkAddress(
+  address: HyperlinkAddressShape | HyperlinkTarget | null | undefined,
+): TextSelectionTarget | null {
   const start = address?.anchor?.start;
   const end = address?.anchor?.end;
   if (typeof start?.blockId !== 'string' || typeof start?.offset !== 'number') return null;
@@ -407,12 +413,10 @@ function textTargetFromHyperlinkAddress(address) {
   };
 }
 
-/**
- * @param {TextSelectionTarget | null} textTarget
- * @param {HyperlinkAddressShape | HyperlinkTarget | null | undefined} address
- * @returns {boolean}
- */
-function textTargetMatchesHyperlinkAddress(textTarget, address) {
+function textTargetMatchesHyperlinkAddress(
+  textTarget: TextSelectionTarget | null,
+  address: HyperlinkAddressShape | HyperlinkTarget | null | undefined,
+): boolean {
   const target = textTargetFromHyperlinkAddress(address);
   if (!target) return false;
   return (
@@ -423,13 +427,11 @@ function textTargetMatchesHyperlinkAddress(textTarget, address) {
   );
 }
 
-/**
- * @param {LinkPopoverDocumentApi | null | undefined} doc
- * @param {string | undefined} text
- * @param {string | undefined} blockId
- * @returns {TextSelectionTarget | null}
- */
-function textTargetFromQueryMatch(doc, text, blockId) {
+function textTargetFromQueryMatch(
+  doc: LinkPopoverDocumentApi | null | undefined,
+  text: string | undefined,
+  blockId: string | undefined,
+): TextSelectionTarget | null {
   if (typeof text !== 'string' || !text) return null;
   const result = doc?.query?.match?.({
     select: { type: 'text', pattern: text, caseSensitive: true },
@@ -440,8 +442,8 @@ function textTargetFromQueryMatch(doc, text, blockId) {
   const targets = (Array.isArray(result?.items) ? result.items : [])
     .map((item) => item?.target)
     .filter(
-      /** @returns {target is TextSelectionTarget} */
-      (target) => target?.kind === 'selection' && Boolean(target?.start?.blockId) && Boolean(target?.end?.blockId),
+      (target): target is TextSelectionTarget =>
+        target?.kind === 'selection' && Boolean(target?.start?.blockId) && Boolean(target?.end?.blockId),
     );
   const blockTargets =
     typeof blockId === 'string'
@@ -456,30 +458,16 @@ function textTargetFromQueryMatch(doc, text, blockId) {
  * True when a clicked link element is inside a painted TOC entry
  * (`.superdoc-toc-entry`). TOC entry links navigate to their heading instead of
  * opening the link editor.
- * @param {Element | null | undefined} element
  */
-function isTocEntryLinkElement(element) {
+function isTocEntryLinkElement(element: Element | null | undefined): boolean {
   return Boolean(element && typeof element.closest === 'function' && element.closest('.superdoc-toc-entry'));
 }
 
-/** @param {Element | null | undefined} element */
-function isNoteCrossReferenceLinkElement(element) {
+function isNoteCrossReferenceLinkElement(element: Element | null | undefined): boolean {
   const kind = element?.getAttribute('data-sd-note-cross-reference');
   return (kind === 'ref' || kind === 'noteRef') && Boolean(element?.closest('[data-sd-note-role="body"]'));
 }
 
-/**
- * @param {Object} options
- * @param {() => SurfaceManager | null | undefined} options.getSurfaceManager
- * @param {() => Editor | null | undefined} options.getActiveEditor
- * @param {() => SuperDocUI | null | undefined} options.getUi
- * @param {() => HyperlinkActivationHandler | LinkPopoverResolver | null | undefined} options.getActivationHandler
- * @param {() => 'hyperlinks.onActivate' | 'compatibility' | null | undefined} [options.getActivationHandlerSource]
- * @param {() => boolean} [options.getBuiltInEditorDisabled]
- * @param {() => boolean} [options.shouldInterceptNavigationOnlyHyperlinks]
- * @param {() => HTMLElement | null | undefined} options.getLayerElement
- * @param {(payload: { error: Error, source: string }) => void} options.emitException
- */
 export function useLinkPopover({
   getSurfaceManager,
   getActiveEditor,
@@ -490,24 +478,20 @@ export function useLinkPopover({
   shouldInterceptNavigationOnlyHyperlinks = () => false,
   getLayerElement,
   emitException,
-}) {
-  /** @type {{ href: string, element: HTMLAnchorElement, handle: SurfaceHandle, pointerDownTarget: EventTarget | null, unbindPointerDown: (() => void) | null } | null} */
-  let currentPopover = null;
-  /** @type {{ href: string, element: HTMLAnchorElement, closedAt: number } | null} */
-  let recentOutsideClose = null;
+}: UseLinkPopoverOptions) {
+  let currentPopover: ActivePopover | null = null;
+  let recentOutsideClose: { href: string; element: HTMLAnchorElement; closedAt: number } | null = null;
   let openGeneration = 0;
-  /** @type {WeakMap<HyperlinkActivationContext, Promise<ResolvedHyperlinkTarget | null>>} */
-  const resolvedHyperlinksByActivation = new WeakMap();
+  const resolvedHyperlinksByActivation = new WeakMap<
+    HyperlinkActivationContext,
+    Promise<ResolvedHyperlinkTarget | null>
+  >();
 
   function cancelPendingOpen() {
     openGeneration += 1;
   }
 
-  /**
-   * @param {SurfaceHandle | null | undefined} handle
-   * @param {SurfaceOutcome} [outcome]
-   */
-  function clearCurrentPopover(handle, outcome) {
+  function clearCurrentPopover(handle: SurfaceHandle | null | undefined, outcome?: SurfaceOutcome) {
     if (!handle || !currentPopover || currentPopover.handle !== handle) return;
     const activePopover = currentPopover;
     activePopover.unbindPointerDown?.();
@@ -535,11 +519,7 @@ export function useLinkPopover({
     activePopover?.handle?.close?.(reason);
   }
 
-  /**
-   * @param {HyperlinkActivationContext} ctx
-   * @returns {DirectSurfaceRequest}
-   */
-  function sharedFloatingConfig(ctx) {
+  function sharedFloatingConfig(ctx: HyperlinkActivationContext): DirectSurfaceRequest {
     return {
       id: FLOATING_SURFACE_ID,
       mode: 'floating',
@@ -554,13 +534,8 @@ export function useLinkPopover({
     };
   }
 
-  /**
-   * @param {HyperlinkActivationContext} ctx
-   * @param {SurfaceHandle} handle
-   */
-  function rememberHandle(ctx, handle) {
-    /** @type {{ href: string, element: HTMLAnchorElement, handle: SurfaceHandle, pointerDownTarget: EventTarget | null, unbindPointerDown: (() => void) | null }} */
-    const activePopover = {
+  function rememberHandle(ctx: HyperlinkActivationContext, handle: SurfaceHandle) {
+    const activePopover: ActivePopover = {
       href: ctx.href,
       element: ctx.element,
       handle,
@@ -568,8 +543,7 @@ export function useLinkPopover({
       unbindPointerDown: null,
     };
     const ownerDocument = ctx.element.ownerDocument;
-    /** @param {PointerEvent} event */
-    const onPointerDown = (event) => {
+    const onPointerDown = (event: PointerEvent) => {
       activePopover.pointerDownTarget = event.target ?? null;
     };
     ownerDocument.addEventListener('pointerdown', onPointerDown, true);
@@ -585,13 +559,10 @@ export function useLinkPopover({
   /**
    * Find a mounted named anchor for runtimes that do not expose the bookmark
    * model. Model-backed runtimes never use DOM identity for navigation.
-   * @param {HTMLElement | null} container
-   * @param {string} escapedAnchorName
-   * @returns {HTMLElement | null}
    */
-  function findMountedAnchor(container, escapedAnchorName) {
+  function findMountedAnchor(container: HTMLElement | null, escapedAnchorName: string): HTMLElement | null {
     return (
-      container?.querySelector?.(
+      container?.querySelector?.<HTMLElement>(
         `a[name='${escapedAnchorName}'], [data-bookmark-marker='start'][data-bookmark-name='${escapedAnchorName}']`,
       ) ?? null
     );
@@ -607,9 +578,8 @@ export function useLinkPopover({
    * Best-effort and body-story only. The authoring facade self-guards in
    * viewing mode (no editable selection target), so callers gate this to
    * editing/suggesting via `placeCaret`.
-   * @param {string} blockId
    */
-  async function placeCaretAtBookmark(blockId, offset) {
+  async function placeCaretAtBookmark(blockId: string, offset: number) {
     const setSelectionTarget = getActiveEditor()?.authoring?.setSelectionTarget;
     if (typeof setSelectionTarget !== 'function') return;
 
@@ -626,21 +596,21 @@ export function useLinkPopover({
   /**
    * Navigate to a body bookmark through its model address. A mounted-anchor
    * fallback is reserved for runtimes without a callable bookmark model.
-   * @param {string | null | undefined} anchorUrl
-   * @param {{ placeCaret?: boolean, revalidateCaretAfterReveal?: boolean }} [options]
    */
-  async function navigateToAnchor(anchorUrl, { placeCaret = false, revalidateCaretAfterReveal = false } = {}) {
+  async function navigateToAnchor(
+    anchorUrl: string | null | undefined,
+    { placeCaret = false, revalidateCaretAfterReveal = false }: AnchorNavigationOptions = {},
+  ): Promise<boolean> {
     if (typeof anchorUrl !== 'string' || !anchorUrl.startsWith('#')) return false;
     const anchorName = decodeAnchorFragment(anchorUrl.slice(1));
     const editor = getActiveEditor();
     const generation = openGeneration;
-    /** @param {AbortSignal} [signal] */
-    const navigate = (signal) =>
+    const navigate = (signal?: AbortSignal) =>
       navigateAnchorInEditor(anchorName, editor, generation, placeCaret, revalidateCaretAfterReveal, signal);
     if (revalidateCaretAfterReveal) {
       try {
-        const host = /** @type {LinkNavigationHost | null | undefined} */ (editor?.host);
-        const input = host?.getHandles?.()?.editing?.input;
+        const host = editor?.host;
+        const input = isLinkNavigationHost(host) ? host.getHandles?.()?.editing?.input : undefined;
         if (typeof input?.runAfterPendingInput === 'function') return await input.runAfterPendingInput(navigate);
       } catch {
         return false;
@@ -649,25 +619,16 @@ export function useLinkPopover({
     return navigate();
   }
 
-  /**
-   * @param {string} anchorName
-   * @param {Editor | null | undefined} editor
-   * @param {number} generation
-   * @param {boolean} placeCaret
-   * @param {boolean} revalidateCaretAfterReveal
-   * @param {AbortSignal} [signal]
-   */
   async function navigateAnchorInEditor(
-    anchorName,
-    editor,
-    generation,
-    placeCaret,
-    revalidateCaretAfterReveal,
-    signal,
-  ) {
+    anchorName: string,
+    editor: Editor | null | undefined,
+    generation: number,
+    placeCaret: boolean,
+    revalidateCaretAfterReveal: boolean,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
     if (signal?.aborted || editor !== getActiveEditor() || generation !== openGeneration) return false;
-    /** @type {LinkPopoverDocumentApi | null | undefined} */
-    const doc = editor?.doc;
+    const doc = linkPopoverDocumentApi(editor);
     const bookmarkGet = doc?.bookmarks?.get;
     if (typeof bookmarkGet !== 'function') {
       const mountedAnchor = findMountedAnchor(getUi()?.viewport?.getHost?.() ?? null, cssEscape(anchorName));
@@ -675,16 +636,16 @@ export function useLinkPopover({
       scrollToElement(mountedAnchor, { block: 'start', behavior: 'instant' });
       return true;
     }
-    async function readBodyBookmark() {
+    const readBodyBookmark = async () => {
       try {
         const list = doc?.bookmarks?.list;
         if (typeof list === 'function') {
-          const catalog = await Promise.resolve(list.call(doc.bookmarks));
+          const catalog = await Promise.resolve(list.call(doc?.bookmarks));
           if (signal?.aborted || editor !== getActiveEditor() || generation !== openGeneration) return null;
           if (catalog?.items?.filter((item) => item.name === anchorName).length !== 1) return null;
         }
         const bookmark = await Promise.resolve(
-          bookmarkGet.call(doc.bookmarks, {
+          bookmarkGet.call(doc?.bookmarks, {
             target: { kind: 'entity', entityType: 'bookmark', name: anchorName },
           }),
         );
@@ -698,7 +659,7 @@ export function useLinkPopover({
       } catch {
         return null;
       }
-    }
+    };
     let position = await readBodyBookmark();
     if (!position || signal?.aborted || editor !== getActiveEditor() || generation !== openGeneration) return false;
     if (placeCaret && !revalidateCaretAfterReveal) await placeCaretAtBookmark(position.blockId, position.offset);
@@ -708,7 +669,7 @@ export function useLinkPopover({
     for (let step = 0; step < MAX_ANCHOR_NAVIGATION_STEPS; step += 1) {
       if (signal?.aborted || editor !== getActiveEditor() || generation !== openGeneration) return false;
       try {
-        const target = {
+        const target: TextAddress = {
           kind: 'text',
           blockId: position.blockId,
           range: { start: position.offset, end: position.offset },
@@ -738,13 +699,8 @@ export function useLinkPopover({
     return false;
   }
 
-  /**
-   * @param {HyperlinkActivationContext} ctx
-   * @returns {Promise<ResolvedHyperlinkTarget | null>}
-   */
-  async function resolveClickedHyperlink(ctx) {
-    /** @type {LinkPopoverDocumentApi | null | undefined} */
-    const doc = ctx.editor?.doc;
+  async function resolveClickedHyperlink(ctx: HyperlinkActivationContext): Promise<ResolvedHyperlinkTarget | null> {
+    const doc = linkPopoverDocumentApi(ctx.editor);
     let result;
     try {
       result = await Promise.resolve(doc?.hyperlinks?.list?.());
@@ -757,7 +713,9 @@ export function useLinkPopover({
     const clickedHref = normalizeHrefForMatch(ctx.href);
     const clickedTextTarget = readClickedTextTarget(ctx.element, doc);
     const clickedPartUri = readClickedPartUri(ctx.element);
-    const storiesWithPartUris = stories.filter((story) => typeof story?.partUri === 'string');
+    const storiesWithPartUris = stories.filter(
+      (story): story is HyperlinkStory & { partUri: string } => typeof story?.partUri === 'string',
+    );
     const candidateStories =
       clickedPartUri && storiesWithPartUris.length > 0
         ? storiesWithPartUris.filter((story) => normalizePartUri(story.partUri) === normalizePartUri(clickedPartUri))
@@ -767,8 +725,7 @@ export function useLinkPopover({
       // `HyperlinkStory` declares the record shape this loop reads; the
       // runtime still narrows the array before trusting it.
       const hyperlinks = Array.isArray(story?.hyperlinks) ? story.hyperlinks : [];
-      /** @param {HyperlinkRecord} hyperlink */
-      const hydrateHyperlink = async (hyperlink) => {
+      const hydrateHyperlink = async (hyperlink: HyperlinkRecord): Promise<HyperlinkRecord> => {
         if (!hyperlink?.hyperlinkNodeId || !story?.storyId || hyperlink.address) return hyperlink;
         try {
           const detailedResult = await Promise.resolve(
@@ -782,8 +739,7 @@ export function useLinkPopover({
           return hyperlink;
         }
       };
-      /** @param {HyperlinkRecord[]} matches */
-      const addressHit = async (matches) => {
+      const addressHit = async (matches: HyperlinkRecord[]) => {
         if (!clickedTextTarget) return null;
         const hydratedMatches = await Promise.all(matches.map(hydrateHyperlink));
         const addressMatches = hydratedMatches.filter((hyperlink) =>
@@ -839,10 +795,8 @@ export function useLinkPopover({
   /**
    * Resolve a clicked hyperlink once per activation. The handler and built-in
    * UI can both request the same Document API target.
-   * @param {HyperlinkActivationContext} ctx
-   * @returns {Promise<ResolvedHyperlinkTarget | null>}
    */
-  function resolveClickedHyperlinkOnce(ctx) {
+  function resolveClickedHyperlinkOnce(ctx: HyperlinkActivationContext): Promise<ResolvedHyperlinkTarget | null> {
     const pending = resolvedHyperlinksByActivation.get(ctx);
     if (pending) return pending;
     const resolution = resolveClickedHyperlink(ctx);
@@ -850,11 +804,7 @@ export function useLinkPopover({
     return resolution;
   }
 
-  /**
-   * @param {LinkClickPayload} payload
-   * @returns {boolean}
-   */
-  function matchesRecentOutsideClose(payload) {
+  function matchesRecentOutsideClose(payload: LinkClickPayload): boolean {
     if (!recentOutsideClose) return false;
     const isSameLink = recentOutsideClose.element === payload.element && recentOutsideClose.href === payload.href;
     const isRecent = Date.now() - recentOutsideClose.closedAt <= RECENT_OUTSIDE_CLOSE_MS;
@@ -863,11 +813,7 @@ export function useLinkPopover({
     return true;
   }
 
-  /**
-   * @param {HyperlinkActivationContext} ctx
-   * @param {SurfaceRequest} request
-   */
-  function openSurfaceDeferred(ctx, request) {
+  function openSurfaceDeferred(ctx: HyperlinkActivationContext, request: SurfaceRequest) {
     const manager = getSurfaceManager();
     if (!manager?.open) return;
     const generation = openGeneration;
@@ -878,8 +824,7 @@ export function useLinkPopover({
     });
   }
 
-  /** @param {HyperlinkActivationContext} ctx */
-  function openDefaultPopover(ctx) {
+  function openDefaultPopover(ctx: HyperlinkActivationContext) {
     closeCurrentPopover('replace');
 
     // The V2 host arbitrates TOC editing gestures before link activation;
@@ -911,22 +856,17 @@ export function useLinkPopover({
     if (getBuiltInEditorDisabled()) return;
 
     const closePopover = () => closeCurrentPopover('closed');
-    /** @param {string | null | undefined} anchorUrl */
-    const goToAnchor = async (anchorUrl) => {
+    const goToAnchor = async (anchorUrl: string | null | undefined) => {
       const success = await navigateToAnchor(anchorUrl, { placeCaret: ctx.documentMode !== 'viewing' });
       if (success) closePopover();
       return success;
     };
     const generation = openGeneration;
-    /** @param {ResolvedHyperlinkTarget | null} hyperlinkTarget */
-    const openWithHyperlinkTarget = (hyperlinkTarget) => {
+    const openWithHyperlinkTarget = (hyperlinkTarget: ResolvedHyperlinkTarget | null) => {
       if (generation !== openGeneration) return;
       openSurfaceDeferred(ctx, {
         ...sharedFloatingConfig(ctx),
-        // The `.vue` shim types SFC default exports as `unknown`; narrow to
-        // `object` for `markRaw()` since the Vue compiler guarantees the SFC
-        // default export is a component definition object.
-        component: markRaw(/** @type {object} */ (LinkInput)),
+        component: markRawComponent(LinkInput),
         props: {
           href: hyperlinkTarget?.href || ctx.href,
           target: ctx.target,
@@ -935,7 +875,8 @@ export function useLinkPopover({
           clickedElement: ctx.element,
           hyperlinkTarget,
           hyperlinkText: hyperlinkTarget?.text,
-          textTarget: hyperlinkTarget?.textTarget ?? readClickedTextTarget(ctx.element, ctx.editor?.doc),
+          textTarget:
+            hyperlinkTarget?.textTarget ?? readClickedTextTarget(ctx.element, linkPopoverDocumentApi(ctx.editor)),
           documentMode: ctx.documentMode,
           ui: getUi(),
           closePopover,
@@ -946,19 +887,15 @@ export function useLinkPopover({
     resolveClickedHyperlinkOnce(ctx).then(openWithHyperlinkTarget, () => openWithHyperlinkTarget(null));
   }
 
-  /**
-   * @param {HyperlinkActivationContext} ctx
-   * @param {Extract<LinkPopoverResolution, { type: 'custom' }>} resolution
-   */
-  function openCustomPopover(ctx, resolution) {
+  function openCustomPopover(
+    ctx: HyperlinkActivationContext,
+    resolution: Extract<LinkPopoverResolution, { type: 'custom' }>,
+  ) {
     closeCurrentPopover('replace');
     const closePopover = () => closeCurrentPopover('closed');
     openSurfaceDeferred(ctx, {
       ...sharedFloatingConfig(ctx),
-      // `component` is `unknown` on the public resolution type;
-      // isValidResolution() guaranteed it non-null, so narrow to `object`
-      // for `markRaw()`.
-      component: markRaw(/** @type {object} */ (resolution.component)),
+      component: markRawComponent(resolution.component),
       props: {
         ...resolution.props,
         editor: ctx.editor,
@@ -968,22 +905,18 @@ export function useLinkPopover({
     });
   }
 
-  /**
-   * @param {HyperlinkActivationContext} ctx
-   * @param {Extract<LinkPopoverResolution, { type: 'external' }> | Extract<HyperlinkActivationResult, { type: 'render' }>} resolution
-   */
-  function openApplicationHyperlinkUi(ctx, resolution) {
+  function openApplicationHyperlinkUi(ctx: HyperlinkActivationContext, resolution: ApplicationHyperlinkResolution) {
     closeCurrentPopover('replace');
-    const userRender = resolution.render;
+    const renderHyperlinkUi = resolution.type === 'render' ? resolution.render : null;
+    const renderExternalPopover = resolution.type === 'external' ? resolution.render : null;
     openSurfaceDeferred(ctx, {
       ...sharedFloatingConfig(ctx),
-      /** @param {ExternalSurfaceRenderContext} surfaceCtx */
-      render: (surfaceCtx) => {
+      render: (surfaceCtx: ExternalSurfaceRenderContext) => {
         try {
           const shared = { container: surfaceCtx.container, editor: ctx.editor, href: ctx.href };
-          return resolution.type === 'render'
-            ? userRender({ ...shared, close: () => surfaceCtx.close('closed') })
-            : userRender({ ...shared, closePopover: () => surfaceCtx.close('closed') });
+          return renderHyperlinkUi
+            ? renderHyperlinkUi({ ...shared, close: () => surfaceCtx.close('closed') })
+            : renderExternalPopover?.({ ...shared, closePopover: () => surfaceCtx.close('closed') });
         } catch (error) {
           const usesOnActivate = resolution.type === 'render';
           emitException({
@@ -1002,20 +935,18 @@ export function useLinkPopover({
       },
     });
   }
-  /**
-   * @param {LinkClickPayload} payload
-   * @returns {import('../core/types/index.js').LinkPopoverContext}
-   */
-  function buildContext(payload) {
+  function buildContext(payload: LinkClickPayload): LinkPopoverContext {
     const layerRect = getLayerElement()?.getBoundingClientRect?.();
     const layerLeft = typeof layerRect?.left === 'number' ? layerRect.left : 0;
     const layerTop = typeof layerRect?.top === 'number' ? layerRect.top : 0;
-    /** @type {import('../core/types/index.js').LinkPopoverContext} */
-    const context = {
+    const context: LinkPopoverContext = {
       // A link click always originates from a mounted editor surface, so the
       // active editor is present here; the public context type declares it
       // required.
-      editor: /** @type {Editor} */ (getActiveEditor()),
+      // A link click always originates from a mounted editor surface, so the
+      // active editor is present here; the public context type declares it
+      // required.
+      editor: getActiveEditor()!,
       href: payload.href,
       target: payload.target,
       rel: payload.rel,
@@ -1041,16 +972,13 @@ export function useLinkPopover({
     return context;
   }
 
-  /**
-   * @param {HyperlinkActivationContext} ctx
-   * @returns {HyperlinkActivationResolution}
-   */
-  function resolveActivation(ctx) {
+  function resolveActivation(ctx: LinkPopoverContext): HyperlinkActivationResolution {
     const handler = getActivationHandler();
     if (typeof handler !== 'function') return { type: 'default' };
     const usesOnActivate = getActivationHandlerSource() === 'hyperlinks.onActivate';
     const errorSource = usesOnActivate ? 'hyperlinks.onActivate' : 'linkPopoverResolver';
-    const fallbackResolution = () => (usesOnActivate ? { type: 'suppress' } : { type: 'default' });
+    const fallbackResolution = (): HyperlinkActivationResolution =>
+      usesOnActivate ? { type: 'suppress' } : { type: 'default' };
 
     try {
       const resolution = handler(ctx);
@@ -1085,8 +1013,7 @@ export function useLinkPopover({
     }
   }
 
-  /** @param {LinkClickPayload | null | undefined} payload */
-  function handleLinkClick(payload) {
+  function handleLinkClick(payload: LinkClickPayload | null | undefined) {
     if (!payload?.element || typeof payload.href !== 'string') return;
     cancelPendingOpen();
     if (currentPopover && currentPopover.element === payload.element && currentPopover.href === payload.href) {

@@ -4,7 +4,7 @@
     "reviewBridge": 6,
     "v1": 6
   },
-  "composables/use-link-popover.js": {
+  "composables/use-link-popover.ts": {
     "host": 1,
     "handles": 1
   },
