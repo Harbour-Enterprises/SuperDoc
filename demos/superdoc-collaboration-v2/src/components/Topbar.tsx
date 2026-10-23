@@ -91,7 +91,6 @@ export function Topbar({
   const ui = useSuperDocUI();
   const document = useSuperDocDocument();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [saving, setSaving] = useState(false);
   const [importError, setImportError] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(documentName);
@@ -116,12 +115,7 @@ export function Topbar({
   // Exports the active document through the SuperDoc host.
   const exportDocument = async (exportedName = documentName.replace(/\.docx$/i, '')) => {
     if (!host || !('export' in host) || typeof host.export !== 'function') return;
-    setSaving(true);
-    try {
-      await host.export({ exportType: ['docx'], exportedName });
-    } finally {
-      setSaving(false);
-    }
+    await host.export({ exportType: ['docx'], exportedName });
   };
 
   // Validates a native file selection before creating an uploaded room.
@@ -156,7 +150,6 @@ export function Topbar({
           },
         ],
       });
-      setSaving(true);
       const result = await ui.document.export({ exportType: ['docx'], triggerDownload: false });
       if (!(result instanceof Blob)) throw new Error('SuperDoc did not return a DOCX file.');
       const writable = await handle.createWritable();
@@ -166,8 +159,6 @@ export function Topbar({
       if (error instanceof DOMException && error.name === 'AbortError') return;
       console.error(error);
       setImportError('The document could not be saved.');
-    } finally {
-      setSaving(false);
     }
   };
 
