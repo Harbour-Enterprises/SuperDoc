@@ -1260,11 +1260,6 @@ export const useCommentsStore = defineStore('comments', () => {
           const importedId = trackedComment.importedId != null ? String(trackedComment.importedId) : null;
           const commentCanonicalId =
             trackedComment.trackedChangeCanonicalId != null ? String(trackedComment.trackedChangeCanonicalId) : null;
-          const commentAliasIds = getCommentAliasIds(trackedComment);
-          const hasCompatibleStory = trackedChangeStoryKeysAreCompatible(
-            getTrackedChangeStoryKey(trackedComment),
-            incomingStoryKey,
-          );
           if (
             normalizedTrackedChangeCanonicalId &&
             commentCanonicalId &&
@@ -1272,6 +1267,13 @@ export const useCommentsStore = defineStore('comments', () => {
           ) {
             return false;
           }
+          const hasCompatibleStory = trackedChangeStoryKeysAreCompatible(
+            getTrackedChangeStoryKey(trackedComment),
+            incomingStoryKey,
+          );
+          const commentAliasIds = hasCompatibleStory
+            ? (trackedChangeIdentityIndex?.aliasesFor?.(trackedComment) ?? getCommentAliasIds(trackedComment))
+            : [];
           if (hasCompatibleStory && commentAliasIds.includes(normalizedChangeId)) return true;
           const incomingAliasIds = new Set(normalizedTrackedChangePositionAliases ?? []);
           if (
@@ -2937,6 +2939,16 @@ export const useCommentsStore = defineStore('comments', () => {
 
   /** Keep one mounted review window plus rows whose interaction is still live. */
   const boundReviewPresentationRows = ({ documentId, visibleIds }) => {
+    const currentRows = commentsList.value;
+    const identityIdsByRow = new Map();
+    const identityIdsFor = (row) => {
+      let ids = identityIdsByRow.get(row);
+      if (!ids) {
+        ids = reviewPresentationIdentityIds(row);
+        identityIdsByRow.set(row, ids);
+      }
+      return ids;
+    };
     const retainedIds = new Set(
       [
         ...visibleIds,
@@ -2956,9 +2968,9 @@ export const useCommentsStore = defineStore('comments', () => {
     let changed = true;
     while (changed) {
       changed = false;
-      for (const row of commentsList.value) {
+      for (const row of currentRows) {
         if (!belongsToTrackedChangeSyncDocument(row, documentId)) continue;
-        const ids = reviewPresentationIdentityIds(row);
+        const ids = identityIdsFor(row);
         if (![...ids].some((id) => retainedIds.has(id))) continue;
         for (const id of ids) {
           if (retainedIds.has(id)) continue;
@@ -2968,11 +2980,12 @@ export const useCommentsStore = defineStore('comments', () => {
       }
     }
 
-    commentsList.value = commentsList.value.filter((row) => {
+    const nextRows = currentRows.filter((row) => {
       if (!belongsToTrackedChangeSyncDocument(row, documentId)) return true;
       if (row === pendingComment.value) return true;
-      return [...reviewPresentationIdentityIds(row)].some((id) => retainedIds.has(id));
+      return [...identityIdsFor(row)].some((id) => retainedIds.has(id));
     });
+    if (nextRows.length !== currentRows.length) commentsList.value = nextRows;
   };
 
   /**
@@ -3434,7 +3447,13 @@ export const useCommentsStore = defineStore('comments', () => {
           addedComments.push(created);
         }
 
-        commentsList.value = nextList;
+        if (
+          mappedInputs.length > 0 ||
+          nextList.length !== commentsList.value.length ||
+          nextList.some((row, index) => row !== commentsList.value[index])
+        ) {
+          commentsList.value = nextList;
+        }
 
         // Family-scoped active-row clearing: only clear when the active row was
         // a real-comment-family row in this document AND it's no longer present.
@@ -4983,9 +5002,23 @@ export const useCommentsStore = defineStore('comments', () => {
     // One unified alias index preserves that relationship without restoring the
     // previous O(existing rows × incoming rows) scan.
     const byIdentityAlias = new Map();
+    const aliasesByRow = new Map();
     const indexedRows = new Set();
     let aliasLookups = 0;
     let candidateVisits = 0;
+    let rowAliasBuilds = 0;
+    let rowAliasCacheHits = 0;
+    const aliasesFor = (comment) => {
+      const cached = aliasesByRow.get(comment);
+      if (cached) {
+        rowAliasCacheHits += 1;
+        return cached;
+      }
+      rowAliasBuilds += 1;
+      const aliases = getCommentAliasIds(comment);
+      aliasesByRow.set(comment, aliases);
+      return aliases;
+    };
     const addAlias = (index, value, comment) => {
       const alias = normalizeCommentId(value);
       if (!alias) return;
@@ -5001,16 +5034,22 @@ export const useCommentsStore = defineStore('comments', () => {
       addAlias(byIdentityAlias, comment.importedId, comment);
       addAlias(byIdentityAlias, comment.trackedChangeCanonicalId, comment);
       addAlias(byIdentityAlias, comment.trackedChangeAnchorKey, comment);
-      getCommentAliasIds(comment).forEach((alias) => addAlias(byIdentityAlias, alias, comment));
+      const aliases = getCommentAliasIds(comment);
+      rowAliasBuilds += 1;
+      aliasesByRow.set(comment, aliases);
+      aliases.forEach((alias) => addAlias(byIdentityAlias, alias, comment));
     };
     commentsList.value.forEach(add);
     return {
       add,
+      aliasesFor,
       work: () => ({
         trackedRowsIndexed: indexedRows.size,
         invalidatedIdMembershipChecks: 0,
         incomingAliasLookups: aliasLookups,
         candidateVisits,
+        rowAliasBuilds,
+        rowAliasCacheHits,
       }),
       candidates({ changeId, importedId, anchorKey, canonicalId, positionAliases = [] } = {}) {
         const out = new Set();
@@ -5123,6 +5162,7 @@ export const useCommentsStore = defineStore('comments', () => {
                 // decision identity; generic alias refresh keeps its strict guard.
                 row.trackedChangeCanonicalId = params.trackedChangeCanonicalId;
                 row.updateIdentityValues?.({ trackedChangeCanonicalId: params.trackedChangeCanonicalId });
+                trackedChangeIdentityIndex.add(row);
               }
               retainUnchangedRow =
                 retainUnchangedRows &&
@@ -5591,8 +5631,18 @@ export const useCommentsStore = defineStore('comments', () => {
       }
     });
 
+    const aliases = new Map();
+    const aliasesFor = (comment) => {
+      let ids = aliases.get(comment);
+      if (!ids) {
+        ids = getCommentAliasIds(comment);
+        aliases.set(comment, ids);
+      }
+      return ids;
+    };
+
     const findTrackedChangePosition = (comment, positions) => {
-      for (const aliasId of getCommentAliasIds(comment)) {
+      for (const aliasId of aliasesFor(comment)) {
         const entry = positions[aliasId];
         if (entry !== undefined && positionEntryMatchesTrackedChangeStory(entry, comment)) return entry;
       }
@@ -5600,7 +5650,7 @@ export const useCommentsStore = defineStore('comments', () => {
     };
 
     const writeTrackedChangeAliases = (entry, comment, extraKeys = []) => {
-      const keys = [...getCommentAliasIds(comment), ...extraKeys.map((id) => normalizeCommentId(id)).filter(Boolean)];
+      const keys = [...aliasesFor(comment), ...extraKeys.map((id) => normalizeCommentId(id)).filter(Boolean)];
       for (const key of new Set(keys)) {
         if (normalizedPositions[key] === undefined) normalizedPositions[key] = entry;
       }
@@ -5614,7 +5664,7 @@ export const useCommentsStore = defineStore('comments', () => {
         return;
       }
       if (!retainMissingTrackedChangeGeometry) return;
-      if (retainedTrackedChangeIds && !getCommentAliasIds(comment).some((id) => retainedTrackedChangeIds.has(id))) {
+      if (retainedTrackedChangeIds && !aliasesFor(comment).some((id) => retainedTrackedChangeIds.has(id))) {
         return;
       }
       const previous = findTrackedChangePosition(comment, previousPositions);

@@ -32,9 +32,7 @@ import { validateDocumentFragment } from '../validation/fragment-validator.js';
 import { validateStoryLocator } from '../validation/story-validator.js';
 import { textReceiptToSDReceipt } from '../receipt-bridge.js';
 
-// ---------------------------------------------------------------------------
 // Text replacement input (new shape)
-// ---------------------------------------------------------------------------
 
 export type TextReplacementGranularity = 'word' | 'phrase' | 'range';
 

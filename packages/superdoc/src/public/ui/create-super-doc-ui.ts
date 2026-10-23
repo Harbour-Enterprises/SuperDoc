@@ -2939,9 +2939,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       }
       return result;
     };
-    let rawResult: unknown;
+    type CatalogRead = (input: {
+      blocking: boolean;
+      signal: AbortSignal;
+    }) => LooseRecord | PromiseLike<LooseRecord | undefined> | undefined;
+    let rawResult: ReturnType<CatalogRead>;
     try {
-      rawResult = (listTrackedChanges as AnyFn).call(v2TrackedChanges, { blocking: false, signal });
+      rawResult = (listTrackedChanges as CatalogRead).call(v2TrackedChanges, { blocking: false, signal });
     } catch (error) {
       return Promise.reject(error);
     }
@@ -6133,7 +6137,18 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     doc: LooseRecord | null,
     blockId: string,
     story: LooseRecord,
+    selection: SelectionSlice,
   ): { value: LooseRecord | null; status: SliceStatus } => {
+    const applied = doc === getDoc() ? appliedSelectionPresentation(selection)?.listState : null;
+    if (
+      applied?.blockId === blockId &&
+      applied.story &&
+      typeof applied.story === 'object' &&
+      storyLocatorSignature(applied.story) === storyLocatorSignature(story) &&
+      applied.value?.success === true
+    ) {
+      return { value: applied.value, status: 'ready' };
+    }
     const getStateInStory = hostMethod(doc?.lists, 'getStateInStory');
     const getState = hostMethod(doc?.lists, 'getState');
     if (!getStateInStory && !getState) return { value: null, status: 'ready' };
@@ -6154,8 +6169,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   };
 
   /** Read one block's settled list state through the selected story's list-state seam. */
-  const readListStateForBlock = (doc: LooseRecord | null, blockId: string, story: LooseRecord): LooseRecord | null => {
-    return readListStateSnapshotForBlock(doc, blockId, story).value;
+  const readListStateForBlock = (
+    doc: LooseRecord | null,
+    blockId: string,
+    story: LooseRecord,
+    selection: SelectionSlice,
+  ): LooseRecord | null => {
+    return readListStateSnapshotForBlock(doc, blockId, story, selection).value;
   };
 
   /** Read one block's list seed (`'bullet'` / `'ordered'`) in the selected story. */
@@ -6163,8 +6183,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     doc: LooseRecord | null,
     blockId: string,
     story: LooseRecord,
+    selection: SelectionSlice,
   ): 'bullet' | 'ordered' | null => {
-    const result = readListStateForBlock(doc, blockId, story);
+    const result = readListStateForBlock(doc, blockId, story, selection);
     if (!result || result.isListItem !== true) return null;
     return result.seed === 'bullet' || result.seed === 'ordered' ? result.seed : null;
   };
@@ -6179,8 +6200,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     doc: LooseRecord | null,
     blockId: string,
     story: LooseRecord,
+    selection: SelectionSlice,
   ): { value: boolean | null; status: SliceStatus } => {
-    const snapshot = readListStateSnapshotForBlock(doc, blockId, story);
+    const snapshot = readListStateSnapshotForBlock(doc, blockId, story, selection);
     const result = snapshot.value;
     return {
       value: result && typeof result.isListItem === 'boolean' ? result.isListItem : null,
@@ -6193,10 +6215,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const blockIds = selectionBlockIds(selection);
     if (blockIds.length === 0 || !canProbeEverySelectedBlock(blockIds)) return null;
     const story = selectionStory(selection);
-    const firstSeed = readListSeedForBlock(doc, blockIds[0], story);
+    const firstSeed = readListSeedForBlock(doc, blockIds[0], story, selection);
     if (firstSeed !== 'bullet' && firstSeed !== 'ordered') return null;
     for (const blockId of blockIds.slice(1)) {
-      if (readListSeedForBlock(doc, blockId, story) !== firstSeed) return null;
+      if (readListSeedForBlock(doc, blockId, story, selection) !== firstSeed) return null;
     }
     return firstSeed;
   };
@@ -6546,7 +6568,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     if (story.storyType !== 'body') {
       listMembership = [];
       for (const blockId of blockIds) {
-        const { value: isListItem, status } = readListMembershipSnapshotForBlock(doc, blockId, story);
+        const { value: isListItem, status } = readListMembershipSnapshotForBlock(doc, blockId, story, selection);
         // A pending read will invalidate command state when it settles. Until
         // then, preserve the existing available posture without probing later
         // blocks or guessing which mutation family applies.
@@ -6581,7 +6603,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     for (const [index, blockId] of blockIds.entries()) {
       const membership = listMembership
         ? { value: listMembership[index] ?? null, status: 'ready' as const }
-        : readListMembershipSnapshotForBlock(doc, blockId, story);
+        : readListMembershipSnapshotForBlock(doc, blockId, story, selection);
       const isListItem = membership.value;
       if (isListItem === true) {
         if (listOp != null) {
@@ -6658,7 +6680,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       );
     }
 
-    const snapshots = blockIds.map((blockId) => readListStateSnapshotForBlock(doc, blockId, story));
+    const snapshots = blockIds.map((blockId) => readListStateSnapshotForBlock(doc, blockId, story, selection));
     if (snapshots.some(({ status }) => status !== 'ready')) {
       return normalizeCommandState({ enabled: true, active, supported: true, value }, 'builtin');
     }

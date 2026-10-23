@@ -3867,6 +3867,150 @@ describe('comments-store committed review-window apply', () => {
     expect(store.committedReviewPresentations['doc-1'].coordinate.commitSequence).toBe(2);
   });
 
+  it('retains the comments array when a semantic publication keeps every row', () => {
+    const rows = ['first', 'second', 'third'].map((id) => trackedParams(id));
+    expect(publishTracked(rows, trackedPublication(rows, 1)).ok).toBe(true);
+    const before = store.commentsList;
+    const retained = [...before];
+
+    expect(publishTracked(rows, trackedPublication(rows, 2)).ok).toBe(true);
+
+    expect(store.commentsList).toBe(before);
+    retained.forEach((row, index) => expect(store.commentsList[index]).toBe(row));
+    expect(store.committedReviewPresentations['doc-1'].version).toBe(2);
+  });
+
+  it('preserves array publication and subscriber updates for incoming comment changes', () => {
+    expect(apply({ trackedChangeItems: [], commentItems: [{ commentId: 'comment-1', text: 'before' }] }).ok).toBe(true);
+    const before = store.commentsList;
+    const row = before[0];
+    const notifications = [];
+    store.$subscribe(() => notifications.push(store.commentsList.map((entry) => entry.commentText)), { flush: 'sync' });
+
+    expect(apply({ trackedChangeItems: [], commentItems: [{ commentId: 'comment-1', text: 'after' }] }).ok).toBe(true);
+
+    expect(store.commentsList).not.toBe(before);
+    expect(store.commentsList[0]).toBe(row);
+    expect(row.commentText).toBe('after');
+    expect(notifications).toEqual([['after']]);
+  });
+
+  it('builds retention identities once per row across reverse thread closure and preserves pins', () => {
+    const aliasReads = [];
+    const rows = Array.from({ length: 8 }, (_, index) => {
+      const row = makeTrackedChangeRow({
+        commentId: `chain-${index}`,
+        ...(index ? { parentCommentId: `chain-${index - 1}` } : {}),
+      });
+      const read = vi.fn(() => [`source-${index}`]);
+      Object.defineProperty(row, 'trackedChangePositionAliases', { configurable: true, get: read });
+      aliasReads.push(read);
+      return row;
+    }).reverse();
+    const active = makeTrackedChangeRow({ commentId: 'active-pin' });
+    const pending = makeTrackedChangeRow({ commentId: 'pending-pin' });
+    const foreign = makeTrackedChangeRow({ commentId: 'foreign-row', fileId: 'doc-2' });
+    store.commentsList = [...rows, active, pending, foreign, makeTrackedChangeRow({ commentId: 'stale' })];
+    store.activeComment = 'active-pin';
+    store.pendingComment = pending;
+    aliasReads.forEach((read) => read.mockClear());
+
+    expect(
+      apply({
+        commentItems: [],
+        trackedChangeItems: [],
+        requestedTrackedChangeIds: ['chain-0'],
+        preparedReview: { comments: [], trackedChanges: [], presentation: trackedPublication([], 1) },
+      }).ok,
+    ).toBe(true);
+
+    expect(store.commentsList.map((row) => row.commentId)).toEqual([
+      ...rows.map((row) => row.commentId),
+      'active-pin',
+      'pending-pin',
+      'foreign-row',
+    ]);
+    aliasReads.forEach((read) => expect(read).toHaveBeenCalledTimes(3));
+    expect(store.activeComment).toBe('active-pin');
+    expect(store.pendingComment).toBe(pending);
+  });
+
+  it('observes replaced aliases on the next publication and removes a row after its alias loses visibility', () => {
+    const row = makeTrackedChangeRow({ commentId: 'aliased-row', trackedChangePositionAliases: ['old-source'] });
+    store.commentsList = [row];
+    const publish = (source, version) =>
+      apply({
+        commentItems: [],
+        trackedChangeItems: [],
+        requestedTrackedChangeIds: [source],
+        preparedReview: { comments: [], trackedChanges: [], presentation: trackedPublication([], version) },
+      });
+    expect(publish('old-source', 1).ok).toBe(true);
+    expect(store.commentsList[0]).toBe(row);
+    row.trackedChangePositionAliases = ['new-source'];
+    expect(publish('new-source', 2).ok).toBe(true);
+    expect(store.commentsList[0]).toBe(row);
+    expect(publish('old-source', 3).ok).toBe(true);
+    expect(store.commentsList).toEqual([]);
+  });
+
+  it('rejects canonical collisions before expanding a large alias group and refreshes updated row aliases', () => {
+    const count = 40;
+    const aliases = Array.from({ length: 2000 }, (_, index) => `source-${index}`);
+    const group = makeTrackedChangeRow({ commentId: 'group', trackedChangeCanonicalId: 'canonical-group' });
+    const groupAliases = vi.fn(() => aliases);
+    Object.defineProperty(group, 'trackedChangePositionAliases', { configurable: true, get: groupAliases });
+    const rows = Array.from({ length: count }, (_, index) =>
+      makeTrackedChangeRow({
+        commentId: `child-${index}`,
+        trackedChangeCanonicalId: `canonical-${index}`,
+        trackedChangePositionAliases: [`source-${index}`],
+      }),
+    );
+    store.commentsList = [group, ...rows];
+    const params = rows.map((row, index) => ({
+      ...trackedParams(row.commentId, `updated-${index}`),
+      documentId: 'doc-1',
+      trackedChangeCanonicalId: row.trackedChangeCanonicalId,
+      trackedChangePositionAliases: [`source-${index}`, `new-source-${index}`],
+    }));
+    const previous = globalThis.__superdocInteractionTrace;
+    let work;
+    globalThis.__superdocInteractionTrace = {
+      startSpan: (stage) => ({ stage }),
+      endSpan: (span, meta) => {
+        if (span.stage === 'store.trackedChanges.batchIdentity') work = meta;
+      },
+    };
+    try {
+      store.reconcileTrackedChangesFromV2({
+        superdoc,
+        adapter: trackedChangesAdapter,
+        documentId: 'doc-1',
+        items: params,
+        preparedParams: params,
+        pruneStale: false,
+      });
+    } finally {
+      if (previous === undefined) delete globalThis.__superdocInteractionTrace;
+      else globalThis.__superdocInteractionTrace = previous;
+    }
+
+    expect(groupAliases).toHaveBeenCalledTimes(1);
+    expect(work).toMatchObject({
+      trackedRowsIndexed: count + 1,
+      rowAliasBuilds: count * 2 + 1,
+      rowAliasCacheHits: count,
+    });
+    expect(store.commentsList).toHaveLength(count + 1);
+    rows.forEach((row, index) => {
+      expect(row.trackedChangeText).toBe(`updated-${index}`);
+      expect(row.trackedChangeCanonicalId).toBe(`canonical-${index}`);
+      expect(row.trackedChangePositionAliases).toContain(`new-source-${index}`);
+    });
+    expect(group.trackedChangeCanonicalId).toBe('canonical-group');
+  });
+
   it.each(['gap', 'epoch', 'mount', 'empty-mount', 'commit', 'review-version', 'previous-review-version'])(
     'reconciles rows normally when the retained publication has an invalid %s chain',
     (invalid) => {
