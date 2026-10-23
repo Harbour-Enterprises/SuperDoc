@@ -84,6 +84,13 @@ describe('toolbar list facts from the current applied frame', () => {
       'unsuccessful list facts',
       (value) => ({ ...value, listState: { ...value.listState, value: { success: false } } }),
     ],
+    [
+      'array-shaped list facts',
+      (value) => ({
+        ...value,
+        listState: { ...value.listState, value: Object.assign([], { success: true }) },
+      }),
+    ],
   ] satisfies Array<[string, (value: AppliedPresentation) => unknown]>)(
     'retains the canonical document read for %s',
     (_label, transform) => {

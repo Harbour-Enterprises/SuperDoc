@@ -132,7 +132,7 @@ import {
 // ---------------------------------------------------------------------------
 
 type AnyFn = (...args: unknown[]) => unknown;
-type LooseRecord = Record<string, any>;
+type LooseRecord = Record<string, unknown>;
 
 type FirstPartyCommandMutation = {
   selectionReader?: {
@@ -6125,14 +6125,16 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     selection: SelectionSlice,
   ): { value: LooseRecord | null; status: SliceStatus } => {
     const applied = doc === getDoc() ? appliedSelectionPresentation(selection)?.listState : null;
+    const appliedValue = isPlainObject(applied) ? applied.value : undefined;
     if (
-      applied?.blockId === blockId &&
-      applied.story &&
-      typeof applied.story === 'object' &&
+      isPlainObject(applied) &&
+      applied.blockId === blockId &&
+      isPlainObject(applied.story) &&
       storyLocatorSignature(applied.story) === storyLocatorSignature(story) &&
-      applied.value?.success === true
+      isPlainObject(appliedValue) &&
+      appliedValue.success === true
     ) {
-      return { value: applied.value, status: 'ready' };
+      return { value: appliedValue, status: 'ready' };
     }
     const getStateInStory = hostMethod(doc?.lists, 'getStateInStory');
     const getState = hostMethod(doc?.lists, 'getState');

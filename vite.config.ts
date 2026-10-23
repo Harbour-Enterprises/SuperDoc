@@ -94,7 +94,7 @@ export default defineConfig({
         rules: { 'unicorn/no-thenable': 'off' },
       },
       {
-        files: ['packages/superdoc/src/core/SuperDoc.ts', 'packages/superdoc/src/public/ui/create-super-doc-ui.ts'],
+        files: ['packages/superdoc/src/core/SuperDoc.ts'],
         rules: { 'typescript/no-explicit-any': 'off' },
       },
     ],

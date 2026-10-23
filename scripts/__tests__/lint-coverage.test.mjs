@@ -7,45 +7,62 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
-const DIRECTORIES_HOLDING_A_NO_EXPLICIT_ANY_EXEMPTION = [
-  'packages/superdoc/src/core',
-  'packages/superdoc/src/public/ui',
-];
+const DIRECTORIES_HOLDING_A_NO_EXPLICIT_ANY_EXEMPTION = ['packages/superdoc/src/core'];
+
+const DIRECTORIES_THAT_LOST_THEIR_NO_EXPLICIT_ANY_EXEMPTION = ['packages/superdoc/src/public/ui'];
 
 const EXPLICIT_ANY_SOURCE = 'export const probe = (value: any) => value;\n';
 
+function lintAnExplicitAnyProbeIn(dir) {
+  const probeDir = mkdtempSync(join(REPO_ROOT, dir, 'lint-coverage-'));
+  const probe = join(probeDir, 'probe.ts');
+  try {
+    writeFileSync(probe, EXPLICIT_ANY_SOURCE, 'utf8');
+    const rel = relative(REPO_ROOT, probe);
+    const result = spawnSync('pnpm', ['exec', 'vp', 'lint', rel], { cwd: REPO_ROOT, encoding: 'utf8' });
+    return { status: result.status, output: `${result.stdout ?? ''}${result.stderr ?? ''}` };
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true });
+  }
+}
+
+function assertLintRejectsAnExplicitAnyIn(dir, overrideCause) {
+  const { status, output } = lintAnExplicitAnyProbeIn(dir);
+
+  assert.doesNotMatch(
+    output,
+    /No files found to lint/,
+    `vp lint matched no file for a probe inside ${dir}, so that directory is outside the linter. ` +
+      `Check lint.ignorePatterns in vite.config.ts and the paths passed to the lint script.\n${output}`,
+  );
+  assert.match(
+    output,
+    /no-explicit-any/,
+    `vp lint did not report typescript(no-explicit-any) for a probe inside ${dir}. Either the rule is ` +
+      `no longer 'error' in vite.config.ts, or ${overrideCause}.\n${output}`,
+  );
+  assert.notStrictEqual(
+    status,
+    0,
+    `vp lint reported typescript(no-explicit-any) inside ${dir} without failing, so the rule is a ` +
+      `warning rather than an error.\n${output}`,
+  );
+}
+
 for (const dir of DIRECTORIES_HOLDING_A_NO_EXPLICIT_ANY_EXEMPTION) {
   test(`vp lint rejects a new explicit any beside the exempted file in ${dir}`, () => {
-    const probeDir = mkdtempSync(join(REPO_ROOT, dir, 'lint-coverage-'));
-    const probe = join(probeDir, 'probe.ts');
-    try {
-      writeFileSync(probe, EXPLICIT_ANY_SOURCE, 'utf8');
-      const rel = relative(REPO_ROOT, probe);
+    assertLintRejectsAnExplicitAnyIn(
+      dir,
+      'a lint.overrides entry turned it off for more than the single exempted file in this directory',
+    );
+  });
+}
 
-      const result = spawnSync('pnpm', ['exec', 'vp', 'lint', rel], { cwd: REPO_ROOT, encoding: 'utf8' });
-      const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
-
-      assert.doesNotMatch(
-        output,
-        /No files found to lint/,
-        `vp lint matched no file for a probe inside ${dir}, so that directory is outside the linter. ` +
-          `Check lint.ignorePatterns in vite.config.ts and the paths passed to the lint script.\n${output}`,
-      );
-      assert.match(
-        output,
-        /no-explicit-any/,
-        `vp lint did not report typescript(no-explicit-any) for a probe inside ${dir}. Either the rule is ` +
-          `no longer 'error' in vite.config.ts, or a lint.overrides entry turned it off for more than the ` +
-          `single exempted file in this directory.\n${output}`,
-      );
-      assert.notStrictEqual(
-        result.status,
-        0,
-        `vp lint reported typescript(no-explicit-any) inside ${dir} without failing, so the rule is a ` +
-          `warning rather than an error.\n${output}`,
-      );
-    } finally {
-      rmSync(probeDir, { recursive: true, force: true });
-    }
+for (const dir of DIRECTORIES_THAT_LOST_THEIR_NO_EXPLICIT_ANY_EXEMPTION) {
+  test(`vp lint rejects a new explicit any anywhere in ${dir}`, () => {
+    assertLintRejectsAnExplicitAnyIn(
+      dir,
+      'a lint.overrides entry in vite.config.ts exempted this directory from the rule again',
+    );
   });
 }
