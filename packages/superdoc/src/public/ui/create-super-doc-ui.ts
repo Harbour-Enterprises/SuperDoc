@@ -4490,20 +4490,24 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       }
     }
     const publicIdItems = allStoryItems ?? items;
-    const selectionIdContext = buildStoryScopedTrackedChangeIdContext(publicIdItems, selectionStory(selection));
     const selectionActiveChangeIds =
       allTrackedChangesResolvedToken === token
         ? []
         : postDecisionIds
           ? selection.activeChangeIds.filter((id) => !postDecisionIds.has(id))
           : selection.activeChangeIds;
-    const selectionPublicChangeIds = selectionActiveChangeIds.map((id) => selectionIdContext.toPublicId(id) ?? id);
-    const explicitActiveIdContext = explicitActiveChange?.story
-      ? buildStoryScopedTrackedChangeIdContext(publicIdItems, explicitActiveChange.story)
-      : buildTrackedChangeIdContext(publicIdItems);
-    const explicitActiveId = explicitActiveChange
-      ? (explicitActiveIdContext.toPublicId(explicitActiveChange.id) ?? explicitActiveChange.id)
-      : null;
+    let selectionPublicChangeIds: string[] = [];
+    if (selectionActiveChangeIds.length > 0) {
+      const selectionIdContext = buildStoryScopedTrackedChangeIdContext(publicIdItems, selectionStory(selection));
+      selectionPublicChangeIds = selectionActiveChangeIds.map((id) => selectionIdContext.toPublicId(id) ?? id);
+    }
+    let explicitActiveId: string | null = null;
+    if (explicitActiveChange) {
+      const explicitActiveIdContext = explicitActiveChange.story
+        ? buildStoryScopedTrackedChangeIdContext(publicIdItems, explicitActiveChange.story)
+        : buildTrackedChangeIdContext(publicIdItems);
+      explicitActiveId = explicitActiveIdContext.toPublicId(explicitActiveChange.id) ?? explicitActiveChange.id;
+    }
     // #939 maps selection ids to public ids through the selection's own story.
     // This resolver then applies the story guards on top: a non-body selection
     // must not fall back to unscoped body aliasing, and a body selection must not
@@ -4556,12 +4560,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       projectTrackChangesItems(directory.value ?? windowSnapshot.items),
       postDecisionIds,
     );
-    const explicitIdContext = explicitActiveChange?.story
-      ? buildStoryScopedTrackedChangeIdContext(items, explicitActiveChange.story)
-      : buildTrackedChangeIdContext(items);
-    const activeId = explicitActiveChange
-      ? (explicitIdContext.toPublicId(explicitActiveChange.id) ?? explicitActiveChange.id)
-      : windowSnapshot.activeId;
+    let activeId = windowSnapshot.activeId;
+    if (explicitActiveChange) {
+      const explicitIdContext = explicitActiveChange.story
+        ? buildStoryScopedTrackedChangeIdContext(items, explicitActiveChange.story)
+        : buildTrackedChangeIdContext(items);
+      activeId = explicitIdContext.toPublicId(explicitActiveChange.id) ?? explicitActiveChange.id;
+    }
     return {
       status: combineStatus(directory.status, selection.status),
       listStatus: directory.status,

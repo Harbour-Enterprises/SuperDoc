@@ -79,6 +79,49 @@ function pending() {
 }
 
 describe('tracked-change permission reads (SD-5019)', () => {
+  it.each(['window', 'directory', 'legacy'] as const)(
+    'defers tracked-change alias scans until focus is requested in the %s snapshot',
+    async (surface) => {
+      const readProvenance = vi.fn(() => '7');
+      const row = {
+        ...change,
+        sourceIds: {
+          get wordIdInsert() {
+            return readProvenance();
+          },
+        },
+      };
+      const rows = [row];
+      const h = mount(
+        async () => ({ items: rows }),
+        [],
+        surface === 'window' ? rows : surface === 'directory' ? [] : undefined,
+      );
+      let snapshot = h.ui.trackChanges.getSnapshot();
+      const stop =
+        surface === 'directory'
+          ? h.ui.trackChanges.observe((value) => {
+              snapshot = value;
+            })
+          : () => {};
+      await settle();
+      h.refresh();
+      if (surface !== 'directory') snapshot = h.ui.trackChanges.getSnapshot();
+      expect(readProvenance).not.toHaveBeenCalled();
+      expect(snapshot).toMatchObject({
+        status: 'ready',
+        listStatus: 'ready',
+        total: 1,
+        activeId: null,
+        authors: ['Alice'],
+      });
+      expect(snapshot.items[0].change).toBe(row);
+      expect(h.ui.trackChanges.setActive('imported:7')).toBe(true);
+      expect(h.ui.trackChanges.getSnapshot().activeId).toBe('tc-1');
+      expect(readProvenance).toHaveBeenCalled();
+      stop();
+    },
+  );
   it('bounds pending catalog requests across selected IDs and repeated recomputes', () => {
     const read = pending();
     const h = mount(() => read.promise, ['tc-1', 'tc-2', 'tc-3']);
