@@ -92,16 +92,37 @@ describe('public bookmark navigation', () => {
     h.ui.destroy();
   });
 
-  for (const kind of ['missing', 'ambiguous', 'non-body', 'column', 'invalid-range'] as const) {
+  for (const kind of [
+    'missing',
+    'ambiguous',
+    'non-body',
+    'non-body-string',
+    'column',
+    'invalid-range',
+    'inverted-range',
+    'text-offset',
+  ] as const) {
     it(`fails closed for ${kind} without scrolling or applying a selection`, async () => {
       const h = mount();
       const items = kind === 'missing' ? [] : kind === 'ambiguous' ? [INFO, INFO] : [INFO];
       h.list.mockResolvedValue({ items, total: items.length });
       if (kind === 'non-body')
         h.get.mockResolvedValue({ ...INFO, address: { ...ADDRESS, story: { storyType: 'header' } } } as never);
+      if (kind === 'non-body-string')
+        h.get.mockResolvedValue({ ...INFO, address: { ...ADDRESS, story: 'header1' } } as never);
       if (kind === 'column') h.get.mockResolvedValue({ ...INFO, tableColumn: { colFirst: 0, colLast: 1 } } as never);
       if (kind === 'invalid-range')
         h.get.mockResolvedValue({ ...INFO, range: { from: { blockId: 'P1', offset: -1 }, to: INFO.range.to } });
+      if (kind === 'inverted-range')
+        h.get.mockResolvedValue({
+          ...INFO,
+          range: { from: { blockId: 'P1', offset: 5 }, to: { blockId: 'P1', offset: 2 } },
+        });
+      if (kind === 'text-offset')
+        h.get.mockResolvedValue({
+          ...INFO,
+          range: { from: { blockId: 'P1', offset: '2' }, to: INFO.range.to },
+        } as never);
       expect(await h.navigate('Target')).toEqual({ success: false, ok: false, reason: 'target-unresolved' });
       expect(h.scroll).not.toHaveBeenCalled();
       expect(h.apply).not.toHaveBeenCalled();

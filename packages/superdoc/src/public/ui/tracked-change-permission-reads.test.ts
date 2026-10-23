@@ -176,6 +176,22 @@ describe('tracked-change permission reads (SD-5019)', () => {
     expect(await other.ui.toolbar.execute('track-changes-accept-selection')).toEqual({ success: true });
     expect(other.decide).toHaveBeenCalledTimes(1);
   });
+  it('reads authorship from the nested change of a tracked-change row', async () => {
+    const own = mount(() => ({ items: [{ id: 'tc-1', change }] }));
+    await settle();
+    own.refresh();
+    expect(own.ui.commands.get('track-changes-accept-selection').getState().enabled).toBe(false);
+    expect(own.canPerformPermission).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permission: 'RESOLVE_OWN',
+        trackedChange: expect.objectContaining({ author: 'Alice' }),
+      }),
+    );
+    const other = mount(() => ({ items: [{ id: 'tc-1', change: { ...change, author: 'Bob' } }] }));
+    await settle();
+    other.refresh();
+    expect(other.ui.commands.get('track-changes-accept-selection').getState().enabled).toBe(true);
+  });
   it.each([false, true])('retains known ownership during refresh (window directory: %s)', async (windowDirectory) => {
     const own = { ...change, authorEmail: 'alice@example.test' };
     const h = mount(async () => ({ items: [own] }), ['tc-1'], windowDirectory ? [] : undefined, {

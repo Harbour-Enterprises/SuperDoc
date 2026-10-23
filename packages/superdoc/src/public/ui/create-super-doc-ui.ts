@@ -117,6 +117,7 @@ import { collectEntityHitsFromChain } from './entity-at.js';
 import { decodeLayoutStoryDataset } from '@superdoc/dom-contract';
 import { getParagraphInlineDirection } from '@superdoc/contracts';
 import { isPlainObject } from '../../helpers/object-guards.js';
+import type { SurfaceHandle } from '../../core/types/index.js';
 import {
   INLINE_PROPERTY_BY_KEY,
   isStoryLocator,
@@ -1784,15 +1785,10 @@ function normalizeCommandState(state: Partial<CommandState>, source: CommandStat
 }
 
 function projectTrackChangesItem(item: unknown): TrackChangesItem | null {
-  if (!item || typeof item !== 'object') return null;
-  const row = item as LooseRecord;
-  const nested = row.change;
-  const change = nested && typeof nested === 'object' ? (nested as LooseRecord) : row;
-  return {
-    ...row,
-    id: row.id ?? change.id,
-    change,
-  } as TrackChangesItem;
+  if (!isPlainObject(item)) return null;
+  const change = isPlainObject(item.change) ? item.change : item;
+  const projected: Record<string, unknown> = { ...item, id: item.id ?? change.id, change };
+  return projected as unknown as TrackChangesItem;
 }
 
 function trackChangesItemPayload(item: TrackChangesItem): TrackChangeInfo {
@@ -10555,11 +10551,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
             return lastCommandSettlement;
           })();
     };
-    const runForeground = host?.runForegroundInteraction;
-    const lifetime = safeCall<AbortSignal | undefined>(() => host?.getForegroundInteractionLifetime?.(), undefined);
+    const runForeground = hostMethod(host, 'runForegroundInteraction');
+    const lifetime = safeCall<unknown>(() => hostMethod(host, 'getForegroundInteractionLifetime')?.(), undefined);
     const settlement =
-      needsForeground && typeof runForeground === 'function'
-        ? (Promise.resolve(runForeground.call(host, execute, lifetime)) as Promise<CommandExecutionResult>)
+      needsForeground && runForeground
+        ? (Promise.resolve(runForeground(execute, lifetime)) as Promise<CommandExecutionResult>)
         : Promise.resolve(execute());
     if (getCommandDescriptor(id)?.inline?.kind === 'toggle') {
       lastInlineToggleCommandSettlement = settlement;
@@ -10626,26 +10622,27 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
    * a missing capability, so it maps to `not-ready` instead of being swallowed
    * into `host-capability-unavailable`.
    */
-  const getSelectionApplyHelper = (): { helper: LooseRecord } | { reason: SuperDocUIReason } => {
-    const host = getHost();
-    if (typeof host?.getHandles !== 'function') {
+  const getSelectionApplyHelper = (): { helper: Record<string, unknown> } | { reason: SuperDocUIReason } => {
+    const readHandles = hostMethod(getHost(), 'getHandles');
+    if (!readHandles) {
       return { reason: SUPERDOC_UI_REASONS.hostCapabilityUnavailable };
     }
-    let handles: LooseRecord | null = null;
+    let handles: unknown = null;
     try {
-      handles = host.getHandles();
+      handles = readHandles();
     } catch (error) {
       const lifecycle = (error as { reason?: unknown } | null)?.reason;
       const notReady =
         lifecycle === 'host-not-ready' || lifecycle === 'host-disposed' || lifecycle === 'editing-mount-required';
       return { reason: notReady ? SUPERDOC_UI_REASONS.notReady : SUPERDOC_UI_REASONS.hostCapabilityUnavailable };
     }
-    const editingHelper = (handles?.editing as LooseRecord | undefined)?.selectionTargets as LooseRecord | undefined;
-    if (typeof editingHelper?.apply === 'function') {
+    const editing = isPlainObject(handles) ? handles.editing : undefined;
+    const editingHelper = isPlainObject(editing) ? editing.selectionTargets : undefined;
+    if (isPlainObject(editingHelper) && typeof editingHelper.apply === 'function') {
       return { helper: editingHelper };
     }
-    const reviewHelper = handles?.selection as LooseRecord | undefined;
-    if (typeof reviewHelper?.apply === 'function') {
+    const reviewHelper = isPlainObject(handles) ? handles.selection : undefined;
+    if (isPlainObject(reviewHelper) && typeof reviewHelper.apply === 'function') {
       return { helper: reviewHelper };
     }
     return { reason: SUPERDOC_UI_REASONS.hostCapabilityUnavailable };
@@ -10653,21 +10650,20 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
   /** Live host SelectionTarget from editable or review-safe selection handles. */
   const readHostSelectionTarget = (): SelectionTarget | null => {
-    const host = getHost();
-    if (typeof host?.getHandles !== 'function') return null;
-    let handles: LooseRecord | null = null;
+    const readHandles = hostMethod(getHost(), 'getHandles');
+    if (!readHandles) return null;
+    let handles: unknown = null;
     try {
-      handles = host.getHandles();
+      handles = readHandles();
     } catch {
       return null;
     }
+    const editing = isPlainObject(handles) ? handles.editing : undefined;
     const rendered =
-      ((handles?.editing as LooseRecord | undefined)?.selection as LooseRecord | undefined)?.toSelectionTarget?.() ??
-      (handles?.selection as LooseRecord | undefined)?.toSelectionTarget?.();
-    if (!rendered || typeof rendered !== 'object') return null;
-    if ((rendered as LooseRecord).kind !== 'ok') return null;
-    const target = (rendered as LooseRecord).target;
-    return target && typeof target === 'object' ? (target as SelectionTarget) : null;
+      hostMethod(isPlainObject(editing) ? editing.selection : undefined, 'toSelectionTarget')?.() ??
+      hostMethod(isPlainObject(handles) ? handles.selection : undefined, 'toSelectionTarget')?.();
+    if (!isPlainObject(rendered) || rendered.kind !== 'ok') return null;
+    return isPlainObject(rendered.target) ? (rendered.target as SelectionTarget) : null;
   };
   const activateContentControlChrome = (id: string): void => {
     const host = getHost();
@@ -10745,7 +10741,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       try {
         return done(
           normalizeHostSelectionApplyResult(
-            cellTarget ? resolved.helper.apply(target, { tableCells: true }) : resolved.helper.apply(target),
+            hostMethod(resolved.helper, 'apply')?.(target, ...(cellTarget ? [{ tableCells: true }] : [])),
           ),
         );
       } catch {
@@ -10757,7 +10753,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       const resolved = getSelectionApplyHelper();
       if (!('helper' in resolved)) return { ok: false, reason: resolved.reason };
       try {
-        const result = resolved.helper.apply(target);
+        const result = hostMethod(resolved.helper, 'apply')?.(target);
         recompute();
         return normalizeHostSelectionApplyResult(result);
       } catch {
@@ -10768,11 +10764,12 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       if (!getEditor()) return { ok: false, reason: SUPERDOC_UI_REASONS.notReady };
       const resolved = getSelectionApplyHelper();
       if (!('helper' in resolved)) return { ok: false, reason: resolved.reason };
-      if (typeof resolved.helper.placeAroundContentControl !== 'function') {
+      const placeAroundContentControl = hostMethod(resolved.helper, 'placeAroundContentControl');
+      if (!placeAroundContentControl) {
         return { ok: false, reason: SUPERDOC_UI_REASONS.hostCapabilityUnavailable };
       }
       try {
-        const result = await resolved.helper.placeAroundContentControl(input);
+        const result = await placeAroundContentControl(input);
         recompute();
         return normalizeHostSelectionApplyResult(result);
       } catch {
@@ -10782,10 +10779,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     getAnchorRect: (input?: { placement?: 'start' | 'end' | 'center' }): ViewportRect | null => {
       // Prefer the v2 painted/edit-geometry selection rect from the host so the
       // anchor matches the painted layout (not the offscreen ProseMirror DOM).
-      const host = getHost();
-      if (typeof host?.getSelectionAnchorRect === 'function') {
-        const fromHost = safeCall<LooseRecord | null>(() => host.getSelectionAnchorRect(input), null);
-        if (fromHost && typeof fromHost === 'object' && (Number(fromHost.width) > 0 || Number(fromHost.height) > 0)) {
+      const getSelectionAnchorRect = hostMethod(getHost(), 'getSelectionAnchorRect');
+      if (getSelectionAnchorRect) {
+        const fromHost = safeCall<unknown>(() => getSelectionAnchorRect(input), null);
+        if (isPlainObject(fromHost) && (Number(fromHost.width) > 0 || Number(fromHost.height) > 0)) {
           return fromHost as unknown as ViewportRect;
         }
         return null;
@@ -10923,8 +10920,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       const editor = getEditor();
       if (!editor || disposed) return { success: false, ok: false, reason: SUPERDOC_UI_REASONS.notReady };
       const doc = getDoc();
-      const api = doc?.bookmarks as LooseRecord | undefined;
-      if (typeof api?.list !== 'function' || typeof api?.get !== 'function') {
+      const listBookmarks = hostMethod(doc?.bookmarks, 'list');
+      const getBookmark = hostMethod(doc?.bookmarks, 'get');
+      if (!listBookmarks || !getBookmark) {
         return { success: false, ok: false, reason: SUPERDOC_UI_REASONS.operationUnavailable };
       }
       const helper = getSelectionApplyHelper();
@@ -10947,25 +10945,35 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         try {
           // bookmarks.get picks the first duplicate; navigation must not silently
           // choose a different occurrence when an imported name is ambiguous.
-          const directory = await api.list.call(api, address.story ? { in: address.story } : {});
+          const directory = await listBookmarks(address.story ? { in: address.story } : {});
           if (!current()) return unresolved();
-          const items = Array.isArray(directory?.items) ? directory.items : [];
-          if (items.filter((item: LooseRecord) => item?.name === address.name).length !== 1) return unresolved();
-          const info = await api.get.call(api, { target: address });
-          if (!current()) return unresolved();
-          const from = info?.range?.from;
-          const to = info?.range?.to;
-          const pointValid = (point: LooseRecord | undefined): boolean =>
-            typeof point?.blockId === 'string' &&
+          const items: unknown[] = isPlainObject(directory) && Array.isArray(directory.items) ? directory.items : [];
+          if (items.filter((item) => isPlainObject(item) && item.name === address.name).length !== 1) {
+            return unresolved();
+          }
+          const info = await getBookmark({ target: address });
+          if (!current() || !isPlainObject(info)) return unresolved();
+          const range = isPlainObject(info.range) ? info.range : undefined;
+          const infoAddress = isPlainObject(info.address) ? info.address : undefined;
+          const infoStory: unknown = infoAddress?.story;
+          const storyOutsideBody = Boolean(infoStory) && !(isPlainObject(infoStory) && infoStory.storyType === 'body');
+          const textPoint = (point: unknown): { blockId: string; offset: number } | null =>
+            isPlainObject(point) &&
+            typeof point.blockId === 'string' &&
             point.blockId.length > 0 &&
+            typeof point.offset === 'number' &&
             Number.isInteger(point.offset) &&
-            point.offset >= 0;
+            point.offset >= 0
+              ? { blockId: point.blockId, offset: point.offset }
+              : null;
+          const from = textPoint(range?.from);
+          const to = textPoint(range?.to);
           if (
-            info?.name !== address.name ||
-            (info?.address?.story && info.address.story.storyType !== 'body') ||
-            info?.tableColumn ||
-            !pointValid(from) ||
-            !pointValid(to) ||
+            info.name !== address.name ||
+            storyOutsideBody ||
+            info.tableColumn ||
+            !from ||
+            !to ||
             (from.blockId === to.blockId && from.offset > to.offset)
           )
             return unresolved();
@@ -12094,10 +12102,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     },
     getText: () => {
       const doc = getDoc();
-      const result = safeCall<unknown>(doc?.getText ? () => (doc.getText as AnyFn)({}) : undefined, null);
+      const getText = hostMethod(doc, 'getText');
+      const result = safeCall<unknown>(getText ? () => getText({}) : undefined, null);
       if (typeof result === 'string') return result;
-      if (result && typeof result === 'object' && typeof (result as LooseRecord).text === 'string') {
-        return (result as LooseRecord).text;
+      if (isPlainObject(result) && typeof result.text === 'string') {
+        return result.text;
       }
       return null;
     },
@@ -12377,7 +12386,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     // that as a failed bind would rebind on top of a live subscription.
     let subscribed = false;
     const off = safeCall<unknown>(() => {
-      const result = host.observeGeometry(() => entry.schedule());
+      const result = hostMethod(host, 'observeGeometry')?.(() => entry.schedule());
       subscribed = true;
       return result;
     }, null);
@@ -12633,22 +12642,19 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
   const metadataResolutionToken = (): string => {
     const host = getHost();
-    const localRevision =
-      typeof host?.getLocalMutationRevision === 'function'
-        ? safeCall<unknown>(() => host.getLocalMutationRevision(), null)
-        : null;
+    const localRevision = safeCall<unknown>(() => hostMethod(host, 'getLocalMutationRevision')?.(), null);
     return `${contentToken()}|local:${typeof localRevision === 'number' ? localRevision : 'unknown'}`;
   };
 
   /** Resolve a metadata id to its SelectionTarget, or null when unresolved. */
   const resolveMetadataTarget = (id: string): unknown | null => {
     const doc = getDoc();
-    const metaApi = doc?.metadata as LooseRecord | undefined;
-    if (!metaApi || typeof metaApi.resolve !== 'function') return null;
+    const resolveMetadata = hostMethod(doc?.metadata, 'resolve');
+    if (!resolveMetadata) return null;
     const { value, status } = readAsync<unknown>(
       metadataResolveKey(id),
       metadataResolutionToken(),
-      () => metaApi.resolve({ id }),
+      () => resolveMetadata({ id }),
       readMetadataResolvedTarget,
     );
     return status === 'ready' ? value : null;
@@ -12656,11 +12662,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
   const resolveMetadataTargetAsync = async (id: string): Promise<unknown | null> => {
     const doc = getDoc();
-    const metaApi = doc?.metadata as LooseRecord | undefined;
-    if (!metaApi || typeof metaApi.resolve !== 'function') return null;
+    const resolveMetadata = hostMethod(doc?.metadata, 'resolve');
+    if (!resolveMetadata) return null;
     try {
       const token = metadataResolutionToken();
-      const resolved = await Promise.resolve(metaApi.resolve({ id }));
+      const resolved = await Promise.resolve(resolveMetadata({ id }));
       if (token !== metadataResolutionToken()) return null;
       const target = readMetadataResolvedTarget(resolved);
       asyncReads.set(metadataResolveKey(id), {
@@ -12678,8 +12684,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   const metadata: MetadataHandle = {
     getRect: (input): ViewportRectResult & { success: boolean; rect?: ViewportRect } => {
       const doc = getDoc();
-      const metaApi = doc?.metadata as LooseRecord | undefined;
-      if (!metaApi || typeof metaApi.resolve !== 'function') {
+      if (!hostMethod(doc?.metadata, 'resolve')) {
         return rectFailure('unavailable') as ViewportRectResult & { success: boolean; rect?: ViewportRect };
       }
       const target = resolveMetadataTarget(input.id);
@@ -13730,12 +13735,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       computeActiveParagraphStyle(state.selection, getStyleCatalog().cache).style,
   };
 
+  const openWatermarkSurface = hostMethod(superdoc, 'openSurface');
   const watermark = createWatermarkController({
     getEditor: getEditor as Parameters<typeof createWatermarkController>[0]['getEditor'],
     getMode: readDocumentMode,
     getFonts: () => fonts.getFamilyOptions(),
-    getContainer: () => superdoc.element ?? null,
-    openSurface: typeof superdoc.openSurface === 'function' ? (request) => superdoc.openSurface(request) : null,
+    getContainer: () => (superdoc.element ?? null) as HTMLElement | null,
+    openSurface: openWatermarkSurface ? (request) => openWatermarkSurface(request) as SurfaceHandle : null,
   });
   documentResetHooks.push(watermark.close);
   documentModeChangeHooks.push(watermark.close);
