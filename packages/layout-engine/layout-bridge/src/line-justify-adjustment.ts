@@ -147,7 +147,18 @@ export const getJustifyAdjustment = ({
 
   // Derive last-line info from block/line when not explicitly provided.
   // This ensures measurement matches rendering even when callers don't pass these flags.
-  const lastRunIndex = block.runs.length - 1;
+  let lastRunIndex = block.runs.length - 1;
+  for (; lastRunIndex >= 0; lastRunIndex -= 1) {
+    const run = block.runs[lastRunIndex];
+    if (
+      !run ||
+      (run.kind && run.kind !== 'text') ||
+      !('dataAttrs' in run) ||
+      typeof run.dataAttrs?.['data-bookmark-marker'] !== 'string'
+    ) {
+      break;
+    }
+  }
   const lastRun = block.runs[lastRunIndex];
   const lastRunLength = getRunCharacterLength(lastRun);
   const derivedIsLastLine = line.toRun > lastRunIndex || (line.toRun === lastRunIndex && line.toChar >= lastRunLength);
